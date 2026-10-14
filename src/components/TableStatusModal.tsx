@@ -83,21 +83,47 @@ export const TableStatusModal: React.FC = () => {
     else availableCount++
   })
 
-  // Get active orders for a table
+  // Get all orders for a table in the current session
   const getOrdersForTable = (tableName: string) => {
-    return allRecentOrders.filter(
-      o => (o.tableNumber === tableName || o.tableOrQueue === tableName) && 
-           o.status !== 'cancelled'
-    )
+    const session = tableSessions[tableName]
+    return allRecentOrders.filter(o => {
+      const isMatch = o.tableNumber === tableName || o.tableOrQueue === tableName
+      if (!isMatch || o.status === 'cancelled') return false
+
+      if (session) {
+        if (session.status === 'available') return false
+        if (session.sessionId && o.tableSessionId) {
+          return o.tableSessionId === session.sessionId
+        }
+        if (session.openedAt) {
+          return o.createdAt >= session.openedAt - 15000
+        }
+        if (o.status === 'completed') {
+          return false
+        }
+      }
+      return o.status !== 'completed' && Date.now() - o.createdAt < 2 * 60 * 60 * 1000
+    })
   }
 
-  // Get active unpaid/cooking orders for a table
+  // Get active unpaid/cooking orders for a table in the current session
   const getActiveOrdersForTable = (tableName: string) => {
-    return allRecentOrders.filter(
-      o => (o.tableNumber === tableName || o.tableOrQueue === tableName) && 
-           o.status !== 'completed' && 
-           o.status !== 'cancelled'
-    )
+    const session = tableSessions[tableName]
+    return allRecentOrders.filter(o => {
+      const isMatch = o.tableNumber === tableName || o.tableOrQueue === tableName
+      if (!isMatch || o.status === 'completed' || o.status === 'cancelled') return false
+
+      if (session) {
+        if (session.status === 'available') return false
+        if (session.sessionId && o.tableSessionId) {
+          return o.tableSessionId === session.sessionId
+        }
+        if (session.openedAt) {
+          return o.createdAt >= session.openedAt - 15000
+        }
+      }
+      return Date.now() - o.createdAt < 2 * 60 * 60 * 1000
+    })
   }
 
   const handleOpenBillingModal = (tableName: string) => {

@@ -112,27 +112,45 @@ export const LineTakeawayOrderView: React.FC = () => {
   const [tableOrders, setTableOrders] = useState<Order[]>([])
   const [isOrderHistoryOpen, setIsOrderHistoryOpen] = useState(false)
 
+  const isOrderMatchingCustomer = (o: Order) => {
+    if (diningType === 'dine_in') {
+      const isMatchTable = o.tableNumber === cleanTableNumber || o.tableOrQueue === cleanTableNumber
+      if (!isMatchTable || o.status === 'cancelled') return false
+
+      if (currentTableSession) {
+        // Table was cleared and is currently available -> no orders in this new session yet
+        if (currentTableSession.status === 'available') {
+          return false
+        }
+
+        // 1. If both order and table session have sessionId, they must strictly match!
+        if (currentTableSession.sessionId && o.tableSessionId) {
+          return o.tableSessionId === currentTableSession.sessionId
+        }
+
+        // 2. If order has no sessionId, it must have been placed after this session opened
+        if (currentTableSession.openedAt) {
+          return o.createdAt >= currentTableSession.openedAt - 15000
+        }
+
+        // 3. If order is already completed from an old checkout, do not show it
+        if (o.status === 'completed') {
+          return false
+        }
+      }
+
+      // Fallback if no table session is tracked yet: only active (uncompleted) orders from the last 2 hours
+      return o.status !== 'completed' && Date.now() - o.createdAt < 2 * 60 * 60 * 1000
+    } else {
+      const savedIds: string[] = JSON.parse(localStorage.getItem('my_takeaway_order_ids') || '[]')
+      return savedIds.includes(o.id) || (customerPhone && o.customerPhone === customerPhone)
+    }
+  }
+
   const loadTableOrders = async () => {
     try {
       const allDbOrders = await db.orders.toArray()
-      const matchingOrders = allDbOrders.filter(o => {
-        if (diningType === 'dine_in') {
-          const isMatchTable = o.tableNumber === cleanTableNumber || o.tableOrQueue === cleanTableNumber
-          if (!isMatchTable || o.status === 'cancelled') return false
-          
-          if (currentTableSession) {
-            if (currentTableSession.sessionId && o.tableSessionId === currentTableSession.sessionId) return true
-            if (currentTableSession.openedAt && o.createdAt >= currentTableSession.openedAt - 60000) return true
-            if (currentTableSession.status === 'occupied' || currentTableSession.status === 'billed') {
-              return Date.now() - o.createdAt < 12 * 60 * 60 * 1000
-            }
-          }
-          return Date.now() - o.createdAt < 6 * 60 * 60 * 1000
-        } else {
-          const savedIds: string[] = JSON.parse(localStorage.getItem('my_takeaway_order_ids') || '[]')
-          return savedIds.includes(o.id) || (customerPhone && o.customerPhone === customerPhone)
-        }
-      })
+      const matchingOrders = allDbOrders.filter(isOrderMatchingCustomer)
       matchingOrders.sort((a, b) => b.createdAt - a.createdAt)
       setTableOrders(matchingOrders)
     } catch (e) {
@@ -146,23 +164,7 @@ export const LineTakeawayOrderView: React.FC = () => {
     let unsubscribeFirebase: (() => void) | undefined
     if (isFirebaseReady()) {
       unsubscribeFirebase = subscribeToFirebaseOrders((cloudOrders) => {
-        const matching = cloudOrders.filter(o => {
-          if (diningType === 'dine_in') {
-            const isMatchTable = o.tableNumber === cleanTableNumber || o.tableOrQueue === cleanTableNumber
-            if (!isMatchTable || o.status === 'cancelled') return false
-            if (currentTableSession) {
-              if (currentTableSession.sessionId && o.tableSessionId === currentTableSession.sessionId) return true
-              if (currentTableSession.openedAt && o.createdAt >= currentTableSession.openedAt - 60000) return true
-              if (currentTableSession.status === 'occupied' || currentTableSession.status === 'billed') {
-                return Date.now() - o.createdAt < 12 * 60 * 60 * 1000
-              }
-            }
-            return Date.now() - o.createdAt < 6 * 60 * 60 * 1000
-          } else {
-            const savedIds: string[] = JSON.parse(localStorage.getItem('my_takeaway_order_ids') || '[]')
-            return savedIds.includes(o.id) || (customerPhone && o.customerPhone === customerPhone)
-          }
-        })
+        const matching = cloudOrders.filter(isOrderMatchingCustomer)
         matching.sort((a, b) => b.createdAt - a.createdAt)
         setTableOrders(matching)
       })

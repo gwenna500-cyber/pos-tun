@@ -776,7 +776,7 @@ export const usePosStore = create<PosState>((set, get) => ({
     let tableSessionId: string | undefined = undefined
     if (isTable) {
       const currentSession = get().tableSessions[tableLabel]
-      if (currentSession?.sessionId && currentSession.status === 'occupied') {
+      if (currentSession?.sessionId && (currentSession.status === 'occupied' || currentSession.status === 'available')) {
         tableSessionId = currentSession.sessionId
       } else {
         tableSessionId = `sess_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
@@ -821,7 +821,7 @@ export const usePosStore = create<PosState>((set, get) => ({
         tableNumber: tableLabel,
         sessionId: tableSessionId,
         status: 'occupied',
-        openedAt: prev?.status === 'occupied' ? prev.openedAt : Date.now(),
+        openedAt: prev?.status === 'occupied' ? (prev.openedAt || Date.now()) : Date.now(),
         orderCount: (prev?.status === 'occupied' ? (prev.orderCount || 0) : 0) + 1,
         totalAmount: (prev?.status === 'occupied' ? (prev.totalAmount || 0) : 0) + grandTotal,
         lastOrderAt: Date.now(),

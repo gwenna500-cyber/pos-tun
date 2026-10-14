@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { 
   Flame, 
   Clock, 
@@ -16,11 +16,15 @@ import {
   CheckCircle2, 
   UtensilsCrossed,
   Lock,
-  Sparkles
+  Sparkles,
+  Receipt,
+  ChefHat
 } from 'lucide-react'
 import confetti from 'canvas-confetti'
 import { usePosStore } from '../store/usePosStore'
-import { MENU_CATEGORIES, DEFAULT_LINE_OA_SETTINGS } from '../lib/constants'
+import { db } from '../lib/db'
+import { MENU_CATEGORIES, DEFAULT_LINE_OA_SETTINGS, SPICY_LEVELS } from '../lib/constants'
+import { isFirebaseReady, subscribeToFirebaseOrders } from '../lib/firebase'
 import { generatePromptPayQrDataUrl } from '../lib/promptpay'
 import { getLineDirectShareUrl } from '../lib/lineNotify'
 import type { MenuItem, CartItem, SpicyLevel, PaymentMethod, Order, DiningType } from '../types'
@@ -103,6 +107,85 @@ export const LineTakeawayOrderView: React.FC = () => {
   // Order Success Screen
   const [completedOrder, setCompletedOrder] = useState<Order | null>(null)
   const [promptPayQrUrl, setPromptPayQrUrl] = useState<string>('')
+
+  // Orders history for this table / customer
+  const [tableOrders, setTableOrders] = useState<Order[]>([])
+  const [isOrderHistoryOpen, setIsOrderHistoryOpen] = useState(false)
+
+  const loadTableOrders = async () => {
+    try {
+      const allDbOrders = await db.orders.toArray()
+      const matchingOrders = allDbOrders.filter(o => {
+        if (diningType === 'dine_in') {
+          const isMatchTable = o.tableNumber === cleanTableNumber || o.tableOrQueue === cleanTableNumber
+          if (!isMatchTable || o.status === 'cancelled') return false
+          
+          if (currentTableSession) {
+            if (currentTableSession.sessionId && o.tableSessionId === currentTableSession.sessionId) return true
+            if (currentTableSession.openedAt && o.createdAt >= currentTableSession.openedAt - 60000) return true
+            if (currentTableSession.status === 'occupied' || currentTableSession.status === 'billed') {
+              return Date.now() - o.createdAt < 12 * 60 * 60 * 1000
+            }
+          }
+          return Date.now() - o.createdAt < 6 * 60 * 60 * 1000
+        } else {
+          const savedIds: string[] = JSON.parse(localStorage.getItem('my_takeaway_order_ids') || '[]')
+          return savedIds.includes(o.id) || (customerPhone && o.customerPhone === customerPhone)
+        }
+      })
+      matchingOrders.sort((a, b) => b.createdAt - a.createdAt)
+      setTableOrders(matchingOrders)
+    } catch (e) {
+      console.warn('Could not load table orders:', e)
+    }
+  }
+
+  useEffect(() => {
+    loadTableOrders()
+
+    let unsubscribeFirebase: (() => void) | undefined
+    if (isFirebaseReady()) {
+      unsubscribeFirebase = subscribeToFirebaseOrders((cloudOrders) => {
+        const matching = cloudOrders.filter(o => {
+          if (diningType === 'dine_in') {
+            const isMatchTable = o.tableNumber === cleanTableNumber || o.tableOrQueue === cleanTableNumber
+            if (!isMatchTable || o.status === 'cancelled') return false
+            if (currentTableSession) {
+              if (currentTableSession.sessionId && o.tableSessionId === currentTableSession.sessionId) return true
+              if (currentTableSession.openedAt && o.createdAt >= currentTableSession.openedAt - 60000) return true
+              if (currentTableSession.status === 'occupied' || currentTableSession.status === 'billed') {
+                return Date.now() - o.createdAt < 12 * 60 * 60 * 1000
+              }
+            }
+            return Date.now() - o.createdAt < 6 * 60 * 60 * 1000
+          } else {
+            const savedIds: string[] = JSON.parse(localStorage.getItem('my_takeaway_order_ids') || '[]')
+            return savedIds.includes(o.id) || (customerPhone && o.customerPhone === customerPhone)
+          }
+        })
+        matching.sort((a, b) => b.createdAt - a.createdAt)
+        setTableOrders(matching)
+      })
+    }
+
+    const interval = setInterval(loadTableOrders, 5000)
+    const handleStorage = () => loadTableOrders()
+    window.addEventListener('storage', handleStorage)
+
+    return () => {
+      clearInterval(interval)
+      if (unsubscribeFirebase) unsubscribeFirebase()
+      window.removeEventListener('storage', handleStorage)
+    }
+  }, [cleanTableNumber, diningType, customerPhone, currentTableSession])
+
+  const totalItemsOrdered = useMemo(() => {
+    return tableOrders.reduce((sum, o) => sum + o.totalItemsCount, 0)
+  }, [tableOrders])
+
+  const totalTableOrderedAmount = useMemo(() => {
+    return tableOrders.reduce((sum, o) => sum + o.grandTotal, 0)
+  }, [tableOrders])
 
   // Filtered menu
   const filteredItems = useMemo(() => {
@@ -267,6 +350,15 @@ export const LineTakeawayOrderView: React.FC = () => {
       setIsCheckoutOpen(false)
       setCustomerCart([])
       setCustomerOrderAddons([])
+
+      if (!isDineIn) {
+        try {
+          const savedIds: string[] = JSON.parse(localStorage.getItem('my_takeaway_order_ids') || '[]')
+          savedIds.push(order.id)
+          localStorage.setItem('my_takeaway_order_ids', JSON.stringify(savedIds))
+        } catch {}
+      }
+      loadTableOrders()
 
       try {
         confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } })
@@ -445,27 +537,55 @@ export const LineTakeawayOrderView: React.FC = () => {
                   </p>
                 </div>
               ) : (
-                <button
-                  onClick={() => {
-                    setCompletedOrder(null)
-                    setPromptPayQrUrl('')
-                  }}
-                  className="w-full py-3.5 px-4 rounded-xl bg-red-600 hover:bg-red-700 active:scale-[0.99] text-white font-extrabold text-sm flex items-center justify-center gap-2 shadow-md shadow-red-200 transition-all cursor-pointer"
-                >
-                  <Plus className="w-5 h-5" />
-                  <span>🥢 สั่งอาหารเพิ่มที่ {completedOrder.tableOrQueue}</span>
-                </button>
+                <div className="space-y-2">
+                  <button
+                    onClick={() => {
+                      setCompletedOrder(null)
+                      setPromptPayQrUrl('')
+                    }}
+                    className="w-full py-3.5 px-4 rounded-xl bg-red-600 hover:bg-red-700 active:scale-[0.99] text-white font-extrabold text-sm flex items-center justify-center gap-2 shadow-md shadow-red-200 transition-all cursor-pointer"
+                  >
+                    <Plus className="w-5 h-5" />
+                    <span>🥢 สั่งอาหารเพิ่มที่ {completedOrder.tableOrQueue}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCompletedOrder(null)
+                      setIsOrderHistoryOpen(true)
+                    }}
+                    className="w-full py-3 px-4 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 font-extrabold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
+                  >
+                    <Receipt className="w-4 h-4 text-indigo-600" />
+                    <span>📋 ดูประวัติอาหารที่สั่งทั้งหมดของโต๊ะนี้</span>
+                  </button>
+                </div>
               )
             ) : (
-              <a
-                href={lineShareUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full py-3.5 px-4 rounded-xl bg-[#06C755] hover:bg-[#05b34c] text-white font-extrabold text-sm flex items-center justify-center gap-2 shadow-md shadow-emerald-200 transition-all cursor-pointer"
-              >
-                <MessageCircle className="w-5 h-5" />
-                <span>ส่งบิลยืนยันเข้า LINE ทางร้าน</span>
-              </a>
+              <div className="space-y-2">
+                <a
+                  href={lineShareUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-3.5 px-4 rounded-xl bg-[#06C755] hover:bg-[#05b34c] text-white font-extrabold text-sm flex items-center justify-center gap-2 shadow-md shadow-emerald-200 transition-all cursor-pointer"
+                >
+                  <MessageCircle className="w-5 h-5" />
+                  <span>ส่งบิลยืนยันเข้า LINE ทางร้าน</span>
+                </a>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCompletedOrder(null)
+                    setIsOrderHistoryOpen(true)
+                  }}
+                  className="w-full py-3 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-extrabold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
+                >
+                  <Receipt className="w-4 h-4 text-slate-600" />
+                  <span>📋 ดูประวัติการสั่งซื้อ</span>
+                </button>
+              </div>
             )}
 
             {shopSettings.phone && (
@@ -572,10 +692,10 @@ export const LineTakeawayOrderView: React.FC = () => {
             </button>
           </div>
 
-          {/* Table Number Changer (if dining in) */}
-          {diningType === 'dine_in' && (
-            <div className="flex items-center gap-1">
-              {isChangingTable ? (
+          {/* Table Number Changer & Order History Pill */}
+          <div className="flex items-center gap-1.5">
+            {diningType === 'dine_in' && (
+              isChangingTable ? (
                 <div className="flex items-center gap-1">
                   <input
                     type="text"
@@ -588,7 +708,7 @@ export const LineTakeawayOrderView: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setIsChangingTable(false)}
-                    className="px-2 h-7 bg-indigo-600 text-white rounded-lg text-[10px] font-bold"
+                    className="px-2 h-7 bg-indigo-600 text-white rounded-lg text-[10px] font-bold cursor-pointer"
                   >
                     ตกลง
                   </button>
@@ -601,9 +721,21 @@ export const LineTakeawayOrderView: React.FC = () => {
                 >
                   เปลี่ยนโต๊ะ
                 </button>
-              )}
-            </div>
-          )}
+              )
+            )}
+
+            {tableOrders.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setIsOrderHistoryOpen(true)}
+                className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-[11px] font-extrabold flex items-center gap-1 cursor-pointer transition-all shadow-2xs"
+                title="ดูประวัติอาหารที่สั่งไปแล้ว"
+              >
+                <Receipt className="w-3.5 h-3.5" />
+                <span>ประวัติสั่ง ({tableOrders.length})</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Welcome & Info Banner */}
@@ -620,6 +752,32 @@ export const LineTakeawayOrderView: React.FC = () => {
             รอ ~{lineSettings.pickupIntervalMinutes || 15} นาที
           </span>
         </div>
+
+        {/* Active Ordered Items Banner for Table / Customer */}
+        {tableOrders.length > 0 && (
+          <div className="px-4 py-2.5 bg-gradient-to-r from-indigo-50 via-blue-50 to-indigo-50 border-t border-indigo-200 flex items-center justify-between gap-2 animate-fade-in shadow-2xs">
+            <div className="flex items-center gap-2 truncate">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse flex-shrink-0" />
+              <div className="truncate text-xs">
+                <span className="font-black text-indigo-950">
+                  {cleanTableNumber} สั่งไปแล้ว:
+                </span>{' '}
+                <span className="font-extrabold text-indigo-700">
+                  {totalItemsOrdered} รายการ ({tableOrders.length} บิล)
+                </span>{' '}
+                · <span className="font-black text-emerald-600">{totalTableOrderedAmount} ฿</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsOrderHistoryOpen(true)}
+              className="flex-shrink-0 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+            >
+              <Receipt className="w-3.5 h-3.5" />
+              <span>ดูรายการ</span>
+            </button>
+          </div>
+        )}
 
         {/* Category Pills (Only when table is not billed) */}
         {!isTableBilled && (
@@ -683,6 +841,17 @@ export const LineTakeawayOrderView: React.FC = () => {
               <span>ติดต่อพนักงาน: {shopSettings.phone}</span>
             </a>
           )}
+
+          {tableOrders.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setIsOrderHistoryOpen(true)}
+              className="mt-3 w-full py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
+            >
+              <Receipt className="w-4 h-4" />
+              <span>📋 ดูสรุปรายการอาหารที่สั่งทั้งหมดของโต๊ะนี้ ({tableOrders.length} บิล)</span>
+            </button>
+          )}
         </div>
       ) : (
         /* Food Items Catalog */
@@ -722,7 +891,7 @@ export const LineTakeawayOrderView: React.FC = () => {
 
                   <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between">
                     <span className="text-[10px] text-slate-400 font-medium">
-                      {item.category === 'drink' ? 'แตะสั่งเลย' : 'เลือกรสชาติ'}
+                      {item.category === 'drink' ? 'แตะสั่งเลย' : '+ สั่งอาหาร'}
                     </span>
                     <div className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${
                       inCartQty > 0 
@@ -768,6 +937,35 @@ export const LineTakeawayOrderView: React.FC = () => {
             <div className="text-right">
               <span className="text-xl font-black">{totalCartPrice}</span>
               <span className="text-xs ml-0.5">฿</span>
+            </div>
+          </button>
+        </div>
+      )}
+
+      {/* Floating Bottom Order History Bar (when cart is empty, but table has orders) */}
+      {totalCartCount === 0 && tableOrders.length > 0 && !isTableBilled && (
+        <div className="fixed bottom-0 left-0 right-0 p-3 bg-white/95 backdrop-blur-md border-t border-slate-200 z-40 max-w-2xl mx-auto shadow-xl animate-fade-in">
+          <button
+            type="button"
+            onClick={() => setIsOrderHistoryOpen(true)}
+            className="w-full h-13 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.99] text-white rounded-2xl px-4 flex items-center justify-between shadow-lg shadow-indigo-200 transition-all cursor-pointer"
+          >
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center font-black text-sm">
+                <Receipt className="w-4 h-4" />
+              </div>
+              <div className="text-left">
+                <span className="font-extrabold text-sm block leading-tight">
+                  ดูอาหารที่สั่งไปแล้ว ({cleanTableNumber})
+                </span>
+                <span className="text-[11px] text-indigo-100 font-medium">
+                  สั่งแล้ว {totalItemsOrdered} รายการ ({tableOrders.length} บิล)
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5 font-black text-base text-white">
+              <span>{totalTableOrderedAmount} ฿</span>
+              <span className="text-xs font-normal">›</span>
             </div>
           </button>
         </div>
@@ -887,6 +1085,23 @@ export const LineTakeawayOrderView: React.FC = () => {
                 <X className="w-4 h-4" />
               </button>
             </div>
+
+            {/* Previous orders hint in checkout drawer */}
+            {tableOrders.length > 0 && (
+              <div className="px-4 py-2 bg-indigo-50 border-b border-indigo-100 flex items-center justify-between text-xs">
+                <span className="text-indigo-900 font-bold">
+                  โต๊ะนี้สั่งไปแล้ว {tableOrders.length} บิล ({totalTableOrderedAmount} ฿)
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsOrderHistoryOpen(true)}
+                  className="text-[11px] font-black text-indigo-700 hover:text-indigo-900 underline flex items-center gap-1 cursor-pointer"
+                >
+                  <Receipt className="w-3.5 h-3.5" />
+                  <span>ดูรายการเดิม</span>
+                </button>
+              </div>
+            )}
 
             {/* Scrollable Form Body */}
             <div className="p-4 overflow-y-auto space-y-4 flex-1 text-slate-800">
@@ -1273,6 +1488,196 @@ export const LineTakeawayOrderView: React.FC = () => {
                       : `ยืนยันสั่งกลับบ้าน (${totalCartPrice} ฿)`}
                 </span>
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- Order History Drawer / Modal --- */}
+      {isOrderHistoryOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-end sm:items-center justify-center sm:p-4 animate-fade-in">
+          <div className="fixed inset-0" onClick={() => setIsOrderHistoryOpen(false)} />
+          <div className="relative z-10 bg-white w-full rounded-t-3xl sm:rounded-3xl sm:max-w-lg shadow-2xl border border-slate-200 flex flex-col max-h-[90vh] overflow-hidden">
+            {/* Header */}
+            <div className="px-5 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-xs">
+                  <Receipt className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2">
+                    <span>ประวัติอาหารที่สั่ง</span>
+                    <span className="text-xs font-black px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200">
+                      {cleanTableNumber}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-500 font-medium">
+                    รวม {tableOrders.length} รอบการสั่ง · อาหารทั้งหมด {totalItemsOrdered} รายการ
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsOrderHistoryOpen(false)}
+                className="w-9 h-9 rounded-full bg-slate-200/80 hover:bg-slate-300 text-slate-700 flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Total Summary Banner */}
+            <div className="p-4 bg-gradient-to-r from-emerald-50 to-teal-50 border-b border-emerald-200/70 flex items-center justify-between">
+              <div>
+                <span className="text-xs font-bold text-emerald-800 block">
+                  ยอดรวมอาหารทั้งหมดของโต๊ะนี้:
+                </span>
+                <div className="text-2xl sm:text-3xl font-black text-emerald-600">
+                  {totalTableOrderedAmount} <span className="text-sm font-bold text-emerald-700">฿</span>
+                </div>
+              </div>
+              <div className="text-right text-[11px] text-emerald-800">
+                <span className="px-2.5 py-1 rounded-lg bg-white border border-emerald-300 font-bold shadow-2xs inline-block">
+                  {diningType === 'dine_in' ? '💳 ชำระเมื่อทานเสร็จ' : '🥡 ออเดอร์กลับบ้าน'}
+                </span>
+                <span className="block text-[10px] text-slate-400 mt-1">
+                  (อัปเดตสถานะแบบ Real-time)
+                </span>
+              </div>
+            </div>
+
+            {/* Orders List */}
+            <div className="p-4 overflow-y-auto space-y-3.5 flex-1 text-slate-800">
+              {tableOrders.length === 0 ? (
+                <div className="py-12 text-center text-slate-400 space-y-2">
+                  <ChefHat className="w-12 h-12 stroke-1 text-slate-300 mx-auto" />
+                  <p className="font-bold text-sm text-slate-600">ยังไม่มีรายการสั่งอาหารในรอบนี้</p>
+                  <p className="text-xs text-slate-400">เลือกเมนูหม่าล่าทอดแล้วกดสั่งได้เลย ออเดอร์จะขึ้นที่นี่ทันที</p>
+                </div>
+              ) : (
+                tableOrders.map((ord, idx) => {
+                  const spObj = spicyOptions.find(s => s.id === ord.spicyLevel) || SPICY_LEVELS.find(s => s.id === ord.spicyLevel)
+                  const spLabel = spObj?.label || ord.spicyLevel
+
+                  let statusBadge = 'bg-amber-100 text-amber-800 border-amber-300'
+                  let statusText = '⏳ รอคิวปรุง'
+                  if (ord.status === 'cooking') {
+                    statusBadge = 'bg-blue-600 text-white border-blue-600 animate-pulse shadow-2xs'
+                    statusText = '🍳 กำลังทอด...'
+                  } else if (ord.status === 'ready') {
+                    statusBadge = 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
+                    statusText = '🛎️ ทอดเสร็จแล้ว พร้อมเสิร์ฟ'
+                  } else if (ord.status === 'completed') {
+                    statusBadge = 'bg-slate-100 text-slate-700 border-slate-300'
+                    statusText = '✅ เสิร์ฟแล้ว'
+                  }
+
+                  return (
+                    <div
+                      key={ord.id}
+                      className="p-3.5 bg-slate-50/90 rounded-2xl border border-slate-200 space-y-2 text-xs shadow-2xs"
+                    >
+                      {/* Order Header */}
+                      <div className="flex items-center justify-between font-bold text-slate-800 pb-1.5 border-b border-slate-200">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="px-2 py-0.5 rounded-md bg-red-600 text-white font-black text-xs shadow-2xs">
+                            {ord.orderNumber}
+                          </span>
+                          <span className="font-bold text-slate-700 text-xs">
+                            รอบที่ {tableOrders.length - idx}
+                          </span>
+                          <span className="text-[11px] text-slate-400 font-medium">
+                            · {new Date(ord.createdAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })} น.
+                          </span>
+                        </div>
+
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border ${statusBadge}`}>
+                          {statusText}
+                        </span>
+                      </div>
+
+                      {/* Spicy Level */}
+                      {ord.spicyLevel && (
+                        <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-red-50 to-orange-50 text-red-950 border border-red-200 font-bold">
+                          <Flame className="w-3.5 h-3.5 text-red-600 flex-shrink-0" />
+                          <span className="text-[11px] text-red-800">ระดับความเผ็ด:</span>
+                          <span className="px-2 py-0.5 rounded-md bg-red-600 text-white font-black text-[11px] shadow-2xs">
+                            {spLabel}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Addons */}
+                      {ord.orderAddons && ord.orderAddons.length > 0 && (
+                        <div className="flex items-center gap-1.5 flex-wrap px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 text-amber-950 border border-amber-200 font-bold">
+                          <span className="text-[11px] font-black text-amber-800 flex items-center gap-1">
+                            <Sparkles className="w-3 h-3 text-amber-600" />
+                            <span>ตัวเลือกพิเศษ:</span>
+                          </span>
+                          {ord.orderAddons.map((addon, aIdx) => (
+                            <span key={aIdx} className="text-[11px] font-bold bg-white px-2 py-0.5 rounded-md border border-amber-300 text-amber-900 shadow-2xs">
+                              {addon.includes('งา') ? `🌾 ${addon}` : addon.includes('กรอบ') ? `🍟 ${addon}` : addon}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Notes */}
+                      {ord.notes && (
+                        <div className="px-2.5 py-1.5 rounded-xl bg-slate-100 text-slate-700 text-[11px] border border-slate-200">
+                          <span className="font-bold text-slate-800">📝 โน้ต:</span> {ord.notes}
+                        </div>
+                      )}
+
+                      {/* Item list */}
+                      <div className="divide-y divide-slate-200/60 pt-0.5">
+                        {ord.items.map((item, itemIdx) => (
+                          <div key={itemIdx} className="py-1 flex justify-between items-center text-slate-700">
+                            <div className="flex-1 pr-2 truncate">
+                              <span className="font-medium text-slate-900">{item.name}</span>
+                              <span className="font-bold text-slate-900 ml-1">×{item.quantity}</span>
+                              {item.note && (
+                                <span className="block text-[10px] text-slate-400">({item.note})</span>
+                              )}
+                            </div>
+                            <span className="font-bold text-slate-900 flex-shrink-0">
+                              {item.price * item.quantity} ฿
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Subtotal of this round */}
+                      <div className="pt-1.5 border-t border-slate-200 flex justify-between items-center font-black">
+                        <span className="text-slate-500 text-xs">ยอดรอบนี้:</span>
+                        <span className="text-emerald-600 text-sm">{ord.grandTotal} ฿</span>
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={() => setIsOrderHistoryOpen(false)}
+                className="py-2.5 px-4 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs cursor-pointer transition-colors"
+              >
+                ปิดหน้าต่าง
+              </button>
+
+              {!isTableBilled && (
+                <button
+                  type="button"
+                  onClick={() => setIsOrderHistoryOpen(false)}
+                  className="flex-1 py-2.5 px-4 rounded-xl bg-red-600 hover:bg-red-700 active:scale-95 text-white font-black text-xs flex items-center justify-center gap-1.5 shadow-md shadow-red-200 cursor-pointer transition-all"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>สั่งอาหารเพิ่ม</span>
+                </button>
+              )}
             </div>
           </div>
         </div>

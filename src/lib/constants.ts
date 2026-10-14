@@ -137,14 +137,15 @@ export const DEFAULT_SHOP_SETTINGS: ShopSettings = {
   soundEnabled: true,
   hapticEnabled: true,
   autoPrintReceipt: false,
-  firebaseEnabled: false,
+  firebaseEnabled: true,
   firebaseConfig: {
-    apiKey: '',
-    authDomain: '',
-    databaseURL: '',
-    projectId: '',
-    storageBucket: '',
-    messagingSenderId: '',
-    appId: ''
+    apiKey: 'AIzaSyCtfZirIM0pIclQW9l9FuWQw_8CA3aYZRs',
+    authDomain: 'pos123-608f8.firebaseapp.com',
+    databaseURL: 'https://pos123-608f8-default-rtdb.asia-southeast1.firebasedatabase.app',
+    projectId: 'pos123-608f8',
+    storageBucket: 'pos123-608f8.firebasestorage.app',
+    messagingSenderId: '579873330648',
+    appId: '1:579873330648:web:90e7f550b1aa7804a5cead',
+    measurementId: 'G-CW146Q3CN2'
   }
 }

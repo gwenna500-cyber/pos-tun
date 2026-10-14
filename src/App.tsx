@@ -11,6 +11,7 @@ import { ReceiptSlip } from './components/ReceiptSlip'
 import { usePosStore } from './store/usePosStore'
 import { initializeDatabase, db } from './lib/db'
 import { initFirebaseService } from './lib/firebase'
+import { DEFAULT_SHOP_SETTINGS } from './lib/constants'
 import { ShoppingBag, ArrowRight } from 'lucide-react'
 
 export const App: React.FC = () => {
@@ -33,14 +34,25 @@ export const App: React.FC = () => {
       // Load saved shop settings from Dexie
       try {
         const saved = await db.settings.get('shopSettings')
-        if (saved && saved.value) {
-          setShopSettings(saved.value)
-          if (saved.value.firebaseEnabled && saved.value.firebaseConfig) {
-            initFirebaseService(saved.value.firebaseConfig)
+        let settingsToUse = saved?.value || DEFAULT_SHOP_SETTINGS
+
+        // If local settings have empty Firebase config, auto-populate with provided project config
+        if (!settingsToUse.firebaseConfig?.apiKey || settingsToUse.firebaseConfig.apiKey === '') {
+          settingsToUse = {
+            ...settingsToUse,
+            firebaseEnabled: true,
+            firebaseConfig: DEFAULT_SHOP_SETTINGS.firebaseConfig
           }
+          await db.settings.put({ key: 'shopSettings', value: settingsToUse })
+        }
+
+        setShopSettings(settingsToUse)
+        if (settingsToUse.firebaseEnabled && settingsToUse.firebaseConfig) {
+          initFirebaseService(settingsToUse.firebaseConfig)
         }
       } catch (err) {
         console.error('Failed to load settings:', err)
+        initFirebaseService(DEFAULT_SHOP_SETTINGS.firebaseConfig)
       }
 
       await refreshSyncCount()

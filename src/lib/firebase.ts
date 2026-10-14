@@ -1,4 +1,5 @@
 import { initializeApp, getApps, type FirebaseApp } from 'firebase/app'
+import { getAnalytics, isSupported } from 'firebase/analytics'
 import { 
   getDatabase, 
   ref, 
@@ -36,6 +37,17 @@ export function initFirebaseService(config: ShopSettings['firebaseConfig']): boo
     realtimeDb = getDatabase(firebaseApp)
     isFirebaseConfigured = true
     console.log('[Firebase] Realtime Database initialized successfully')
+
+    // Initialize Analytics if supported in this environment
+    if (typeof window !== 'undefined' && config.measurementId) {
+      isSupported().then((supported) => {
+        if (supported && firebaseApp) {
+          getAnalytics(firebaseApp)
+          console.log('[Firebase] Analytics initialized successfully')
+        }
+      }).catch(() => {})
+    }
+
     return true
   } catch (error) {
     console.error('[Firebase] Failed to initialize Firebase:', error)

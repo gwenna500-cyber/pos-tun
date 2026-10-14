@@ -120,5 +120,6 @@ export interface ShopSettings {
     storageBucket: string
     messagingSenderId: string
     appId: string
+    measurementId?: string
   }
 }

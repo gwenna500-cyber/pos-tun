@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+@layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+  }
+
+  input, textarea, select {
+    user-select: text;
+  }
+}
+
+/* Custom scrollbars for clean POS look */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Print thermal styling for 58mm / 80mm receipts */
+@media print {
+  @page {
+    margin: 0;
+    size: 58mm auto;
+  }
+
+  body {
+    background: #fff !important;
+    color: #000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    font-size: 12px !important;
+    font-family: 'Courier New', Courier, monospace, 'Noto Sans Thai', sans-serif !important;
+  }
+
+  /* Hide everything except print area */
+  .no-print {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+    width: 58mm !important;
+    max-width: 58mm !important;
+    padding: 4mm 2mm !important;
+    margin: 0 auto !important;
+  }
+}
+
+@media screen {
+  .print-only {
+    display: none;
+  }
+}

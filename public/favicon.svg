@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="fireGrad" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" stop-color="#dc2626"/>
+      <stop offset="50%" stop-color="#ea580c"/>
+      <stop offset="100%" stop-color="#facc15"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#b91c1c" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="128" fill="#dc2626" />
+  <!-- Circle backdrop -->
+  <circle cx="256" cy="256" r="200" fill="#ffffff" filter="url(#shadow)"/>
+  <circle cx="256" cy="256" r="185" fill="#fef2f2"/>
+  
+  <!-- Skewer Stick -->
+  <line x1="120" y1="392" x2="392" y2="120" stroke="#d97706" stroke-width="14" stroke-linecap="round"/>
+  
+  <!-- Skewer Food Items -->
+  <!-- Meat 1 -->
+  <rect x="180" y="270" width="60" height="48" rx="12" transform="rotate(-45 210 294)" fill="#b91c1c"/>
+  <circle cx="204" cy="290" r="3" fill="#fef08a"/>
+  <circle cx="216" cy="298" r="2.5" fill="#fef08a"/>
+  
+  <!-- Meat 2 (Center) -->
+  <rect x="226" y="224" width="64" height="52" rx="14" transform="rotate(-45 258 250)" fill="#dc2626"/>
+  <circle cx="252" cy="246" r="3.5" fill="#fde047"/>
+  <circle cx="266" cy="254" r="3" fill="#ffffff"/>
+  
+  <!-- Meat 3 -->
+  <rect x="272" y="178" width="60" height="48" rx="12" transform="rotate(-45 302 202)" fill="#991b1b"/>
+  <circle cx="296" cy="198" r="3" fill="#fef08a"/>
+
+  <!-- Flame Accent -->
+  <path d="M 330 110 C 350 140 370 170 350 200 C 330 220 310 200 300 180 C 290 160 310 130 330 110 Z" fill="url(#fireGrad)"/>
+
+  <!-- Text Badge -->
+  <rect x="136" y="340" width="240" height="56" rx="28" fill="#dc2626"/>
+  <text x="256" y="378" font-family="system-ui, sans-serif" font-size="30" font-weight="900" fill="#ffffff" text-anchor="middle" letter-spacing="2">POS ตุ่น</text>
+</svg>

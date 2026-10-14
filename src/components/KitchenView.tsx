@@ -13,9 +13,11 @@ import { updateOrderStatusInDb, getTodayOrders } from '../lib/db'
 import { updateFirebaseOrderStatus, subscribeToFirebaseOrders, isFirebaseReady } from '../lib/firebase'
 import { playKitchenAlert } from '../lib/soundAndHaptic'
 import { SPICY_LEVELS } from '../lib/constants'
+import { usePosStore } from '../store/usePosStore'
 import type { Order, OrderStatus } from '../types'
 
 export const KitchenView: React.FC = () => {
+  const { spicyOptions } = usePosStore()
   const [orders, setOrders] = useState<Order[]>([])
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'cooking' | 'ready'>('all')
   const [soundOn, setSoundOn] = useState(true)
@@ -239,7 +241,7 @@ export const KitchenView: React.FC = () => {
                     </div>
                     <div className="space-y-1.5">
                       {order.items.map((item, idx) => {
-                        const itemSpicy = item.spicyLevel ? SPICY_LEVELS.find(s => s.id === item.spicyLevel) : null
+                        const itemSpicy = item.spicyLevel ? (spicyOptions.find(s => s.id === item.spicyLevel) || SPICY_LEVELS.find(s => s.id === item.spicyLevel)) : null
                         return (
                           <div
                             key={idx}

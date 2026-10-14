@@ -9,7 +9,7 @@ import {
   off, 
   type Database 
 } from 'firebase/database'
-import type { Order, ShopSettings } from '../types'
+import type { Order, ShopSettings, MenuItem, SpicyOption } from '../types'
 import { getPendingSyncOrders, markOrderAsSynced } from './db'
 
 let firebaseApp: FirebaseApp | null = null
@@ -151,3 +151,70 @@ if (typeof window !== 'undefined') {
     syncPendingOrdersToFirebase().catch(err => console.error('[Sync] Auto-sync error:', err))
   })
 }
+
+// Push menu items to Firebase
+export async function syncMenuItemsToFirebase(items: MenuItem[]): Promise<boolean> {
+  if (!isFirebaseReady() || !realtimeDb) return false
+  try {
+    const menuRef = ref(realtimeDb, 'menu')
+    await set(menuRef, items)
+    return true
+  } catch (error) {
+    console.warn('[Firebase] Could not sync menu to Firebase:', error)
+    return false
+  }
+}
+
+// Push spicy options to Firebase
+export async function syncSpicyOptionsToFirebase(options: SpicyOption[]): Promise<boolean> {
+  if (!isFirebaseReady() || !realtimeDb) return false
+  try {
+    const spicyRef = ref(realtimeDb, 'spicyOptions')
+    await set(spicyRef, options)
+    return true
+  } catch (error) {
+    console.warn('[Firebase] Could not sync spicy options to Firebase:', error)
+    return false
+  }
+}
+
+// Subscribe to real-time menu updates
+export function subscribeToFirebaseMenu(callback: (items: MenuItem[]) => void): () => void {
+  if (!isFirebaseReady() || !realtimeDb) return () => {}
+  const menuRef = ref(realtimeDb, 'menu')
+  onValue(menuRef, (snapshot) => {
+    if (snapshot.exists()) {
+      const data = snapshot.val()
+      if (Array.isArray(data)) {
+        callback(data)
+      } else if (typeof data === 'object' && data !== null) {
+        callback(Object.values(data))
+      }
+    }
+  }, (err) => console.warn('[Firebase] Menu subscribe error:', err))
+
+  return () => {
+    if (realtimeDb) off(menuRef)
+  }
+}
+
+// Subscribe to real-time spicy options updates
+export function subscribeToFirebaseSpicyOptions(callback: (options: SpicyOption[]) => void): () => void {
+  if (!isFirebaseReady() || !realtimeDb) return () => {}
+  const spicyRef = ref(realtimeDb, 'spicyOptions')
+  onValue(spicyRef, (snapshot) => {
+    if (snapshot.exists()) {
+      const data = snapshot.val()
+      if (Array.isArray(data)) {
+        callback(data)
+      } else if (typeof data === 'object' && data !== null) {
+        callback(Object.values(data))
+      }
+    }
+  }, (err) => console.warn('[Firebase] Spicy options subscribe error:', err))
+
+  return () => {
+    if (realtimeDb) off(spicyRef)
+  }
+}
+

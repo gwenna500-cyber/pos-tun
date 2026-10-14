@@ -1,13 +1,18 @@
 import React, { useState, useMemo } from 'react'
 import { Search, Plus, Minus, X, Flame, Check } from 'lucide-react'
-import { MENU_CATEGORIES, SPICY_LEVELS } from '../lib/constants'
+import { MENU_CATEGORIES } from '../lib/constants'
 import { usePosStore } from '../store/usePosStore'
 import type { MenuItem, SpicyLevel } from '../types'
 
 export const MenuCatalog: React.FC = () => {
-  const { menuItems, cart, addMenuItem } = usePosStore()
+  const { menuItems, cart, addMenuItem, spicyOptions } = usePosStore()
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
   const [searchQuery, setSearchQuery] = useState<string>('')
+
+  // Active (in-stock) spicy options
+  const activeSpicyOptions = useMemo(() => {
+    return spicyOptions.filter(s => s.isAvailable !== false)
+  }, [spicyOptions])
 
   // Modal state for selecting spicy level when choosing an item
   const [activeItem, setActiveItem] = useState<MenuItem | null>(null)
@@ -34,13 +39,18 @@ export const MenuCatalog: React.FC = () => {
 
   // Handle clicking an item card
   const handleItemClick = (item: MenuItem) => {
+    if (item.isAvailable === false) {
+      alert(`ขออภัย เมนู "${item.name}" สินค้าหมดชั่วคราว`)
+      return
+    }
+
     if (item.category === 'drink') {
       // Drinks don't need spicy level
       addMenuItem(item)
     } else {
       // Open spicy selection modal
       setActiveItem(item)
-      setSelectedSpicy('medium')
+      setSelectedSpicy(activeSpicyOptions[0]?.id || 'medium')
       setItemQty(1)
       setItemNote('')
     }
@@ -107,13 +117,23 @@ export const MenuCatalog: React.FC = () => {
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2.5 overflow-y-auto pr-0.5">
         {filteredItems.map((item) => {
           const qty = getItemCartQty(item.id)
+          const isAvailable = item.isAvailable !== false
 
           return (
             <div
               key={item.id}
               onClick={() => handleItemClick(item)}
-              className="relative bg-white rounded-2xl p-3.5 border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-red-300 transition-all cursor-pointer flex flex-col justify-between active:scale-[0.98] group"
+              className={`relative bg-white rounded-2xl p-3.5 border transition-all cursor-pointer flex flex-col justify-between active:scale-[0.98] group ${
+                isAvailable 
+                  ? 'border-slate-200/90 shadow-2xs hover:shadow-md hover:border-red-300' 
+                  : 'border-slate-200 opacity-60 bg-slate-50'
+              }`}
             >
+              {!isAvailable && (
+                <div className="absolute top-2.5 right-2.5 bg-rose-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full z-10 shadow-xs">
+                  ของหมด
+                </div>
+              )}
               <div>
                 {/* Header: Category Badge & Price */}
                 <div className="flex items-center justify-between gap-1 mb-1.5">
@@ -209,7 +229,7 @@ export const MenuCatalog: React.FC = () => {
                   <span>ระดับความเผ็ดชาสำหรับเมนูนี้:</span>
                 </label>
                 <div className="grid grid-cols-2 gap-2">
-                  {SPICY_LEVELS.map((spicy) => {
+                  {activeSpicyOptions.map((spicy) => {
                     const isSelected = selectedSpicy === spicy.id
                     return (
                       <button
@@ -228,11 +248,13 @@ export const MenuCatalog: React.FC = () => {
                           </span>
                           {isSelected && <Check className="w-4 h-4 text-white" />}
                         </div>
-                        <span className={`text-[11px] mt-1 line-clamp-1 ${
-                          isSelected ? 'text-red-100' : 'text-slate-400'
-                        }`}>
-                          {spicy.desc}
-                        </span>
+                        {spicy.desc && (
+                          <span className={`text-[11px] mt-1 line-clamp-1 ${
+                            isSelected ? 'text-red-100' : 'text-slate-400'
+                          }`}>
+                            {spicy.desc}
+                          </span>
+                        )}
                       </button>
                     )
                   })}

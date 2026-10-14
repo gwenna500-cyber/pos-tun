@@ -6,18 +6,43 @@ import type {
   Order, 
   ShopSettings, 
   SpicyLevel, 
+  SpicyOption,
+  MenuCategory,
   CookingMethod, 
   DiningType, 
   PaymentMethod, 
   StickColorId 
 } from '../types'
-import { STICK_COLORS, DEFAULT_SHOP_SETTINGS, DEFAULT_MENU_ITEMS } from '../lib/constants'
-import { db, saveOrderToDb, getNextQueueNumber, getPendingSyncOrders } from '../lib/db'
-import { pushOrderToFirebase, isFirebaseReady } from '../lib/firebase'
+import { 
+  STICK_COLORS, 
+  DEFAULT_SHOP_SETTINGS, 
+  DEFAULT_MENU_ITEMS, 
+  DEFAULT_SPICY_OPTIONS, 
+  DEFAULT_MENU_CATEGORIES 
+} from '../lib/constants'
+import { 
+  db, 
+  saveOrderToDb, 
+  getNextQueueNumber, 
+  getPendingSyncOrders,
+  getAllMenuItemsFromDb,
+  saveMenuItemToDb,
+  deleteMenuItemFromDb,
+  resetMenuToDefaultsInDb,
+  getSpicyOptionsFromDb,
+  saveSpicyOptionsToDb,
+  resetSpicyToDefaultsInDb
+} from '../lib/db'
+import { 
+  pushOrderToFirebase, 
+  isFirebaseReady,
+  syncMenuItemsToFirebase,
+  syncSpicyOptionsToFirebase
+} from '../lib/firebase'
 import { triggerHaptic, playTapSound, playSuccessChime } from '../lib/soundAndHaptic'
 import { bluetoothPrinter } from '../lib/bluetoothPrinter'
 
-export type PosView = 'pos' | 'kitchen' | 'sales' | 'settings'
+export type PosView = 'pos' | 'kitchen' | 'sales' | 'menu' | 'settings'
 
 interface PosState {
   // Navigation & UI
@@ -52,9 +77,21 @@ interface PosState {
   setOrderNotes: (notes: string) => void
   setDiscount: (amount: number) => void
 
-  // Menu items list
+  // Menu items list & Spicy options
   menuItems: MenuItem[]
-  setMenuItems: (items: MenuItem[]) => void
+  spicyOptions: SpicyOption[]
+  categories: MenuCategory[]
+  loadMenuAndSpicy: () => Promise<void>
+  addMenuItemRecord: (item: Omit<MenuItem, 'id'>) => Promise<MenuItem>
+  updateMenuItemRecord: (id: string, updates: Partial<MenuItem>) => Promise<void>
+  deleteMenuItemRecord: (id: string) => Promise<void>
+  toggleMenuItemAvailability: (id: string) => Promise<void>
+  addSpicyOptionRecord: (option: Omit<SpicyOption, 'id'>) => Promise<SpicyOption>
+  updateSpicyOptionRecord: (id: string, updates: Partial<SpicyOption>) => Promise<void>
+  deleteSpicyOptionRecord: (id: string) => Promise<void>
+  toggleSpicyOptionAvailability: (id: string) => Promise<void>
+  resetMenuDefaults: () => Promise<void>
+  resetSpicyDefaults: () => Promise<void>
 
   // Checkout & Modals
   isPaymentModalOpen: boolean
@@ -96,7 +133,110 @@ export const usePosStore = create<PosState>((set, get) => ({
   discount: 0,
 
   menuItems: DEFAULT_MENU_ITEMS,
-  setMenuItems: (menuItems) => set({ menuItems }),
+  spicyOptions: DEFAULT_SPICY_OPTIONS,
+  categories: DEFAULT_MENU_CATEGORIES,
+
+  loadMenuAndSpicy: async () => {
+    try {
+      const items = await getAllMenuItemsFromDb()
+      const spicy = await getSpicyOptionsFromDb()
+      set({ menuItems: items, spicyOptions: spicy })
+    } catch (err) {
+      console.error('Failed to load menu & spicy:', err)
+    }
+  },
+
+  addMenuItemRecord: async (itemData) => {
+    const newItem: MenuItem = {
+      ...itemData,
+      id: `m_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
+    }
+    await saveMenuItemToDb(newItem)
+    const updated = [...get().menuItems, newItem]
+    set({ menuItems: updated })
+    syncMenuItemsToFirebase(updated).catch(console.error)
+    return newItem
+  },
+
+  updateMenuItemRecord: async (id, updates) => {
+    const current = get().menuItems
+    const updated = current.map(item => item.id === id ? { ...item, ...updates } : item)
+    set({ menuItems: updated })
+    const item = updated.find(i => i.id === id)
+    if (item) {
+      await saveMenuItemToDb(item)
+    }
+    syncMenuItemsToFirebase(updated).catch(console.error)
+  },
+
+  deleteMenuItemRecord: async (id) => {
+    await deleteMenuItemFromDb(id)
+    const updated = get().menuItems.filter(item => item.id !== id)
+    set({ menuItems: updated })
+    syncMenuItemsToFirebase(updated).catch(console.error)
+  },
+
+  toggleMenuItemAvailability: async (id) => {
+    const current = get().menuItems
+    const updated = current.map(item =>
+      item.id === id ? { ...item, isAvailable: !item.isAvailable } : item
+    )
+    set({ menuItems: updated })
+    const target = updated.find(i => i.id === id)
+    if (target) {
+      await saveMenuItemToDb(target)
+    }
+    syncMenuItemsToFirebase(updated).catch(console.error)
+  },
+
+  addSpicyOptionRecord: async (optionData) => {
+    const newOption: SpicyOption = {
+      ...optionData,
+      id: `spicy_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
+    }
+    const updated = [...get().spicyOptions, newOption]
+    set({ spicyOptions: updated })
+    await saveSpicyOptionsToDb(updated)
+    syncSpicyOptionsToFirebase(updated).catch(console.error)
+    return newOption
+  },
+
+  updateSpicyOptionRecord: async (id, updates) => {
+    const current = get().spicyOptions
+    const updated = current.map(s => s.id === id ? { ...s, ...updates } : s)
+    set({ spicyOptions: updated })
+    await saveSpicyOptionsToDb(updated)
+    syncSpicyOptionsToFirebase(updated).catch(console.error)
+  },
+
+  deleteSpicyOptionRecord: async (id) => {
+    const updated = get().spicyOptions.filter(s => s.id !== id)
+    set({ spicyOptions: updated })
+    await saveSpicyOptionsToDb(updated)
+    syncSpicyOptionsToFirebase(updated).catch(console.error)
+  },
+
+  toggleSpicyOptionAvailability: async (id) => {
+    const current = get().spicyOptions
+    const updated = current.map(s =>
+      s.id === id ? { ...s, isAvailable: !s.isAvailable } : s
+    )
+    set({ spicyOptions: updated })
+    await saveSpicyOptionsToDb(updated)
+    syncSpicyOptionsToFirebase(updated).catch(console.error)
+  },
+
+  resetMenuDefaults: async () => {
+    const items = await resetMenuToDefaultsInDb()
+    set({ menuItems: items })
+    syncMenuItemsToFirebase(items).catch(console.error)
+  },
+
+  resetSpicyDefaults: async () => {
+    const spicy = await resetSpicyToDefaultsInDb()
+    set({ spicyOptions: spicy })
+    syncSpicyOptionsToFirebase(spicy).catch(console.error)
+  },
 
   addStickByColor: (colorId) => {
     const stick = (STICK_COLORS as any[]).find(s => s.id === colorId)

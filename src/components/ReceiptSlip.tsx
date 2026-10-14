@@ -14,7 +14,8 @@ export const ReceiptSlip: React.FC = () => {
     isReceiptModalOpen, 
     activeReceiptOrder, 
     closeReceiptModal, 
-    shopSettings 
+    shopSettings,
+    spicyOptions
   } = usePosStore()
 
   const [btStatus, setBtStatus] = useState<string>('')
@@ -105,7 +106,7 @@ export const ReceiptSlip: React.FC = () => {
               {/* Itemized list */}
               <div className="py-2 border-b border-dashed border-slate-300 space-y-1.5">
                 {order.items.map((item, idx) => {
-                  const spicy = item.spicyLevel ? SPICY_LEVELS.find(s => s.id === item.spicyLevel) : null
+                  const spicy = item.spicyLevel ? (spicyOptions.find(s => s.id === item.spicyLevel) || SPICY_LEVELS.find(s => s.id === item.spicyLevel)) : null
                   return (
                     <div key={idx} className="flex justify-between items-start text-[11px]">
                       <div className="flex-1 pr-1 truncate">
@@ -216,7 +217,7 @@ export const ReceiptSlip: React.FC = () => {
         {/* Items */}
         <div style={{ fontSize: '11px' }}>
           {order.items.map((item, idx) => {
-            const spicy = item.spicyLevel ? SPICY_LEVELS.find(s => s.id === item.spicyLevel) : null
+            const spicy = item.spicyLevel ? (spicyOptions.find(s => s.id === item.spicyLevel) || SPICY_LEVELS.find(s => s.id === item.spicyLevel)) : null
             return (
               <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
                 <span>

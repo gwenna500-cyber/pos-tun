@@ -5,6 +5,7 @@ import { CartPanel } from './components/CartPanel'
 import { KitchenView } from './components/KitchenView'
 import { SalesReportView } from './components/SalesReportView'
 import { SettingsView } from './components/SettingsView'
+import { MenuManagementView } from './components/MenuManagementView'
 import { PaymentModal } from './components/PaymentModal'
 import { ReceiptSlip } from './components/ReceiptSlip'
 import { usePosStore } from './store/usePosStore'
@@ -22,13 +23,15 @@ export const App: React.FC = () => {
     toggleMobileCart,
     setIsOnline,
     refreshSyncCount,
-    setShopSettings
+    setShopSettings,
+    loadMenuAndSpicy
   } = usePosStore()
 
   // Initialize DB and Network Listeners on Mount
   useEffect(() => {
     const init = async () => {
       await initializeDatabase()
+      await loadMenuAndSpicy()
       
       // Load saved shop settings from Dexie
       try {
@@ -150,6 +153,7 @@ export const App: React.FC = () => {
 
         {currentView === 'kitchen' && <KitchenView />}
         {currentView === 'sales' && <SalesReportView />}
+        {currentView === 'menu' && <MenuManagementView />}
         {currentView === 'settings' && <SettingsView />}
       </main>
 

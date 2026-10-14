@@ -5,6 +5,7 @@ import {
   ChefHat, 
   BarChart3, 
   Settings, 
+  BookOpen,
   Wifi, 
   WifiOff, 
   RefreshCw,
@@ -45,6 +46,7 @@ export const Header: React.FC = () => {
     { view: 'pos', label: 'แคชเชียร์ / ขาย', icon: <UtensilsCrossed className="w-5 h-5" /> },
     { view: 'kitchen', label: 'จอครัว (KDS)', icon: <ChefHat className="w-5 h-5" /> },
     { view: 'sales', label: 'รายงานยอดขาย', icon: <BarChart3 className="w-5 h-5" /> },
+    { view: 'menu', label: 'จัดการเมนู & รสชาติ', icon: <BookOpen className="w-5 h-5" /> },
     { view: 'settings', label: 'ตั้งค่า & บลูทูธ', icon: <Settings className="w-5 h-5" /> }
   ]
 

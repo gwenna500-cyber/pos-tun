@@ -28,7 +28,8 @@ export const CartPanel: React.FC<CartPanelProps> = ({ isMobileDrawer = false }) 
     setOrderNotes,
     discount,
     openPaymentModal,
-    toggleMobileCart
+    toggleMobileCart,
+    spicyOptions
   } = usePosStore()
 
   const totalItemsCount = cart.reduce((sum, item) => sum + item.quantity, 0)
@@ -89,7 +90,7 @@ export const CartPanel: React.FC<CartPanelProps> = ({ isMobileDrawer = false }) 
           </div>
         ) : (
           cart.map((item) => {
-            const spicy = item.spicyLevel ? SPICY_LEVELS.find(s => s.id === item.spicyLevel) : null
+            const spicy = item.spicyLevel ? (spicyOptions.find(s => s.id === item.spicyLevel) || SPICY_LEVELS.find(s => s.id === item.spicyLevel)) : null
 
             return (
               <div

@@ -11,14 +11,21 @@ export interface StickColorOption {
   label: string
 }
 
-export type SpicyLevel = 
-  | 'none'          // ไม่เผ็ด
-  | 'mild'          // เผ็ดน้อย
-  | 'medium'        // เผ็ดกลาง
-  | 'numbing'       // เผ็ดชา (ลิ้นชา)
-  | 'separate'      // พริกแยก
-  | 'dry'           // ย่างแห้ง
-  | 'extra_sesame'  // โรยงาเยอะ
+export type SpicyLevel = string
+
+export interface SpicyOption {
+  id: string
+  label: string
+  desc?: string
+  badgeClass: string
+  isAvailable: boolean
+}
+
+export interface MenuCategory {
+  id: string
+  name: string
+  icon?: string
+}
 
 export type CookingMethod = 
   | 'grill' // ย่างหม่าล่า

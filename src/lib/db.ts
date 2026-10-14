@@ -1,6 +1,6 @@
 import Dexie, { type Table } from 'dexie'
-import type { Order, MenuItem } from '../types'
-import { DEFAULT_MENU_ITEMS, DEFAULT_SHOP_SETTINGS } from './constants'
+import type { Order, MenuItem, SpicyOption } from '../types'
+import { DEFAULT_MENU_ITEMS, DEFAULT_SHOP_SETTINGS, DEFAULT_SPICY_OPTIONS } from './constants'
 
 export class PosDatabase extends Dexie {
   orders!: Table<Order, string>
@@ -105,3 +105,57 @@ export async function updateOrderStatusInDb(orderId: string, status: Order['stat
   }
   await db.orders.update(orderId, updates)
 }
+
+// Menu items CRUD
+export async function getAllMenuItemsFromDb(): Promise<MenuItem[]> {
+  try {
+    const items = await db.menu.toArray()
+    if (items.length === 0) {
+      await db.menu.bulkAdd(DEFAULT_MENU_ITEMS)
+      return DEFAULT_MENU_ITEMS
+    }
+    return items
+  } catch (err) {
+    console.error('Error loading menu from db:', err)
+    return DEFAULT_MENU_ITEMS
+  }
+}
+
+export async function saveMenuItemToDb(item: MenuItem): Promise<void> {
+  await db.menu.put(item)
+}
+
+export async function deleteMenuItemFromDb(id: string): Promise<void> {
+  await db.menu.delete(id)
+}
+
+export async function resetMenuToDefaultsInDb(): Promise<MenuItem[]> {
+  await db.menu.clear()
+  await db.menu.bulkAdd(DEFAULT_MENU_ITEMS)
+  return DEFAULT_MENU_ITEMS
+}
+
+// Spicy options CRUD
+export async function getSpicyOptionsFromDb(): Promise<SpicyOption[]> {
+  try {
+    const record = await db.settings.get('spicyOptions')
+    if (record && record.value && Array.isArray(record.value) && record.value.length > 0) {
+      return record.value
+    }
+    await db.settings.put({ key: 'spicyOptions', value: DEFAULT_SPICY_OPTIONS })
+    return DEFAULT_SPICY_OPTIONS
+  } catch (err) {
+    console.error('Error loading spicy options from db:', err)
+    return DEFAULT_SPICY_OPTIONS
+  }
+}
+
+export async function saveSpicyOptionsToDb(options: SpicyOption[]): Promise<void> {
+  await db.settings.put({ key: 'spicyOptions', value: options })
+}
+
+export async function resetSpicyToDefaultsInDb(): Promise<SpicyOption[]> {
+  await db.settings.put({ key: 'spicyOptions', value: DEFAULT_SPICY_OPTIONS })
+  return DEFAULT_SPICY_OPTIONS
+}
+

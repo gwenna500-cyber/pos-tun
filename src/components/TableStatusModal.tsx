@@ -34,6 +34,7 @@ export const TableStatusModal: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'all' | 'occupied' | 'billed' | 'available'>('all')
   const [selectedTableForBilling, setSelectedTableForBilling] = useState<string | null>(null)
   const [billingPaymentMethod, setBillingPaymentMethod] = useState<PaymentMethod>('cash')
+  const [isPaymentMethodLocked, setIsPaymentMethodLocked] = useState(true)
   const [isProcessing, setIsProcessing] = useState(false)
   
   // Table orders preview
@@ -97,6 +98,15 @@ export const TableStatusModal: React.FC = () => {
            o.status !== 'completed' && 
            o.status !== 'cancelled'
     )
+  }
+
+  const handleOpenBillingModal = (tableName: string) => {
+    const activeOrders = getActiveOrdersForTable(tableName)
+    const session = tableSessions[tableName]
+    const chosenMethod = session?.paymentMethod || activeOrders.find(o => o.paymentMethod)?.paymentMethod || 'cash'
+    setBillingPaymentMethod(chosenMethod)
+    setIsPaymentMethodLocked(true)
+    setSelectedTableForBilling(tableName)
   }
 
   const handleConfirmBill = async (tableName: string) => {
@@ -353,7 +363,7 @@ export const TableStatusModal: React.FC = () => {
                   {status === 'occupied' && (
                     <div className="flex items-center gap-1.5">
                       <button
-                        onClick={() => setSelectedTableForBilling(tableName)}
+                        onClick={() => handleOpenBillingModal(tableName)}
                         className="flex-1 h-10 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-black text-xs flex items-center justify-center gap-1.5 shadow-sm cursor-pointer transition-all"
                       >
                         <Lock className="w-3.5 h-3.5" />
@@ -519,48 +529,114 @@ export const TableStatusModal: React.FC = () => {
             })()}
 
             {/* Payment Method Selector */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                ช่องทางการชำระเงิน:
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setBillingPaymentMethod('cash')}
-                  className={`p-3 rounded-2xl border text-left flex items-center gap-2 transition-all cursor-pointer ${
-                    billingPaymentMethod === 'cash'
-                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
-                      : 'bg-slate-50 border-slate-200 text-slate-700'
-                  }`}
-                >
-                  <Banknote className="w-5 h-5" />
-                  <div>
-                    <div className="font-extrabold text-xs">เงินสด</div>
-                    <div className={`text-[10px] ${billingPaymentMethod === 'cash' ? 'text-emerald-100' : 'text-slate-400'}`}>
-                      รับเงินสดหน้าร้าน
-                    </div>
-                  </div>
-                </button>
+            {(() => {
+              const activeOrders = getActiveOrdersForTable(selectedTableForBilling)
+              const session = tableSessions[selectedTableForBilling]
+              const customerChosenMethod = session?.paymentMethod || activeOrders.find(o => o.paymentMethod)?.paymentMethod
+              const isLocked = isPaymentMethodLocked && !!customerChosenMethod
 
-                <button
-                  type="button"
-                  onClick={() => setBillingPaymentMethod('promptpay')}
-                  className={`p-3 rounded-2xl border text-left flex items-center gap-2 transition-all cursor-pointer ${
-                    billingPaymentMethod === 'promptpay'
-                      ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                      : 'bg-slate-50 border-slate-200 text-slate-700'
-                  }`}
-                >
-                  <QrCode className="w-5 h-5" />
-                  <div>
-                    <div className="font-extrabold text-xs">พร้อมเพย์ QR</div>
-                    <div className={`text-[10px] ${billingPaymentMethod === 'promptpay' ? 'text-blue-100' : 'text-slate-400'}`}>
-                      โอนเงิน / สแกนจ่าย
-                    </div>
+              return (
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      <span>ช่องทางการชำระเงิน:</span>
+                      {customerChosenMethod && (
+                        <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200 flex items-center gap-1">
+                          <Lock className="w-3 h-3 text-indigo-600" />
+                          <span>ลูกค้าเลือกล่วงหน้าแล้ว</span>
+                        </span>
+                      )}
+                    </label>
+
+                    {customerChosenMethod && isLocked && (
+                      <button
+                        type="button"
+                        onClick={() => setIsPaymentMethodLocked(false)}
+                        className="text-[11px] text-slate-500 hover:text-indigo-600 underline font-semibold cursor-pointer"
+                        title="คลิกหากลูกค้าต้องการเปลี่ยนช่องทางชำระเงินที่หน้าร้าน"
+                      >
+                        เปลี่ยนช่องทางชำระ
+                      </button>
+                    )}
                   </div>
-                </button>
-              </div>
-            </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    {/* CASH BUTTON */}
+                    <button
+                      type="button"
+                      disabled={isLocked && customerChosenMethod !== 'cash'}
+                      onClick={() => setBillingPaymentMethod('cash')}
+                      className={`p-3 rounded-2xl border text-left flex items-center gap-2 transition-all ${
+                        isLocked && customerChosenMethod !== 'cash'
+                          ? 'opacity-40 cursor-not-allowed bg-slate-100 border-slate-200 text-slate-400'
+                          : billingPaymentMethod === 'cash'
+                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm ring-2 ring-emerald-300 cursor-pointer'
+                            : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100 cursor-pointer'
+                      }`}
+                    >
+                      <Banknote className="w-5 h-5 flex-shrink-0" />
+                      <div className="flex-1 truncate">
+                        <div className="font-extrabold text-xs flex items-center justify-between">
+                          <span>เงินสด</span>
+                          {customerChosenMethod === 'cash' && (
+                            <span className="text-[9px] bg-white/20 px-1.5 py-0.2 rounded font-black">
+                              ลูกค้าเลือก
+                            </span>
+                          )}
+                          {isLocked && customerChosenMethod !== 'cash' && (
+                            <Lock className="w-3.5 h-3.5 text-slate-400" />
+                          )}
+                        </div>
+                        <div className={`text-[10px] ${billingPaymentMethod === 'cash' ? 'text-emerald-100' : 'text-slate-400'}`}>
+                          {isLocked && customerChosenMethod !== 'cash' ? 'ถูกล็อกไว้' : 'รับเงินสดหน้าร้าน'}
+                        </div>
+                      </div>
+                    </button>
+
+                    {/* PROMPTPAY BUTTON */}
+                    <button
+                      type="button"
+                      disabled={isLocked && customerChosenMethod !== 'promptpay'}
+                      onClick={() => setBillingPaymentMethod('promptpay')}
+                      className={`p-3 rounded-2xl border text-left flex items-center gap-2 transition-all ${
+                        isLocked && customerChosenMethod !== 'promptpay'
+                          ? 'opacity-40 cursor-not-allowed bg-slate-100 border-slate-200 text-slate-400'
+                          : billingPaymentMethod === 'promptpay'
+                            ? 'bg-blue-600 text-white border-blue-600 shadow-sm ring-2 ring-blue-300 cursor-pointer'
+                            : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100 cursor-pointer'
+                      }`}
+                    >
+                      <QrCode className="w-5 h-5 flex-shrink-0" />
+                      <div className="flex-1 truncate">
+                        <div className="font-extrabold text-xs flex items-center justify-between">
+                          <span>พร้อมเพย์ QR</span>
+                          {customerChosenMethod === 'promptpay' && (
+                            <span className="text-[9px] bg-white/20 px-1.5 py-0.2 rounded font-black">
+                              ลูกค้าเลือก
+                            </span>
+                          )}
+                          {isLocked && customerChosenMethod !== 'promptpay' && (
+                            <Lock className="w-3.5 h-3.5 text-slate-400" />
+                          )}
+                        </div>
+                        <div className={`text-[10px] ${billingPaymentMethod === 'promptpay' ? 'text-blue-100' : 'text-slate-400'}`}>
+                          {isLocked && customerChosenMethod !== 'promptpay' ? 'ถูกล็อกไว้' : 'โอนเงิน / สแกนจ่าย'}
+                        </div>
+                      </div>
+                    </button>
+                  </div>
+
+                  {isLocked && customerChosenMethod && (
+                    <div className="mt-1.5 text-[11px] text-indigo-700 font-medium flex items-center gap-1">
+                      <Lock className="w-3 h-3 text-indigo-500" />
+                      <span>
+                        ล็อกตามที่ลูกค้าเลือกจากหน้าสั่งอาหาร ({customerChosenMethod === 'promptpay' ? 'พร้อมเพย์ QR' : 'เงินสด / เช็คบิลหน้าร้าน'}) ไม่ต้องกดซ้ำซ้อน
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
 
             {/* Lock Notice */}
             <div className="p-3 bg-amber-50 rounded-2xl border border-amber-200 text-xs text-amber-900 leading-relaxed flex items-start gap-2">

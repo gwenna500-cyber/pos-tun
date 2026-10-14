@@ -825,7 +825,8 @@ export const usePosStore = create<PosState>((set, get) => ({
         orderCount: (prev?.status === 'occupied' ? (prev.orderCount || 0) : 0) + 1,
         totalAmount: (prev?.status === 'occupied' ? (prev.totalAmount || 0) : 0) + grandTotal,
         lastOrderAt: Date.now(),
-        customerName: orderData.customerName || prev?.customerName
+        customerName: orderData.customerName || prev?.customerName,
+        paymentMethod: orderData.paymentMethod || prev?.paymentMethod
       }
       const nextSessions = { ...get().tableSessions, [tableLabel]: updatedSession }
       set({ tableSessions: nextSessions })

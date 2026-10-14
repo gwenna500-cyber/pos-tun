@@ -9,7 +9,7 @@ import {
   Vibrate, 
   Printer, 
   Check, 
-  Globe, 
+  Smartphone, 
   UploadCloud, 
   CheckCircle2 
 } from 'lucide-react'
@@ -104,15 +104,13 @@ export const SettingsView: React.FC = () => {
         orderNumber: 'Q-99',
         tableOrQueue: 'ทดสอบเครื่องพิมพ์',
         items: [
-          { cartItemId: 't1', name: 'หม่าล่าเนื้อโคขุน (ไม้เขียว)', price: 20, quantity: 2 },
-          { cartItemId: 't2', name: 'สามชั้นหมักพริกหม่าล่า (ไม้เหลือง)', price: 15, quantity: 3 }
+          { cartItemId: 't1', name: 'หมูสามชั้นทอดหม่าล่า', price: 20, quantity: 2, spicyLevel: 'medium' as const },
+          { cartItemId: 't2', name: 'เอ็นข้อไก่ทอดกรุบกรอบ', price: 20, quantity: 3, spicyLevel: 'numbing' as const }
         ],
         totalItemsCount: 5,
-        subtotal: 85,
+        subtotal: 100,
         discount: 0,
-        grandTotal: 85,
-        spicyLevel: 'numbing' as const,
-        cookingMethod: 'grill' as const,
+        grandTotal: 100,
         diningType: 'takeaway' as const,
         notes: 'ทดสอบระบบ Bluetooth ESC/POS 58mm',
         paymentMethod: 'promptpay' as const,
@@ -368,35 +366,47 @@ export const SettingsView: React.FC = () => {
           </div>
         </div>
 
-        {/* Section 4: Netlify Deployment Guide & Status */}
-        <div className="bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-2xl p-5 shadow-xs flex flex-col justify-between">
+        {/* Section 4: PWA Installation & Device Guide */}
+        <div className="bg-slate-900 text-white rounded-2xl p-5 shadow-xs flex flex-col justify-between">
           <div>
-            <div className="flex items-center gap-2 pb-2 border-b border-slate-700">
-              <Globe className="w-5 h-5 text-teal-400" />
-              <h2 className="font-black text-white text-base">การ Deploy ขึ้น Netlify</h2>
+            <div className="flex items-center gap-2 pb-2 border-b border-slate-800">
+              <Smartphone className="w-5 h-5 text-red-400" />
+              <h2 className="font-black text-white text-base">วิธีติดตั้งแอปบน iPad / มือถือ</h2>
             </div>
 
-            <div className="mt-3 space-y-2 text-xs text-slate-300 leading-relaxed">
-              <p>
-                โปรเจกต์นี้ได้รับการตั้งค่าไฟล์ <code className="bg-slate-800 px-1.5 py-0.5 rounded text-teal-300">netlify.toml</code> และ <code className="bg-slate-800 px-1.5 py-0.5 rounded text-teal-300">_redirects</code> สำหรับ SPA Routing และ PWA Service Worker เรียบร้อยแล้ว
+            <div className="mt-3 space-y-2.5 text-xs text-slate-300 leading-relaxed">
+              <p className="text-slate-400">
+                ติดตั้งเป็น Web App (PWA) ลงหน้าจอโฮมเพื่อเปิดใช้งานได้เต็มจอ เสมือนแอปแท้ และเปิดใช้งานได้แม้ออฟไลน์
               </p>
               
-              <div className="p-3 bg-slate-800/80 rounded-xl border border-slate-700 space-y-1">
-                <div className="font-bold text-white">วิธี Deploy ได้ 2 ช่องทาง:</div>
-                <ol className="list-decimal list-inside space-y-1 text-slate-300 text-[11px]">
-                  <li><strong>Git Repository:</strong> Push โปรเจกต์ขึ้น GitHub/GitLab แล้วเชื่อมต่อกับ Netlify (Build: <code className="text-teal-300">npm run build</code>, Publish: <code className="text-teal-300">dist</code>)</li>
-                  <li><strong>Netlify Drop:</strong> รันคำสั่ง <code className="text-teal-300">npm run build</code> แล้วลากโฟลเดอร์ <code className="text-teal-300">dist/</code> ไปวางที่ app.netlify.com/drop ได้ทันที!</li>
-                </ol>
+              <div className="p-3 bg-slate-800/90 rounded-xl border border-slate-700/80 space-y-2.5">
+                <div>
+                  <div className="font-bold text-amber-300 flex items-center gap-1">
+                    📱 สำหรับ iPad / iPhone (Safari):
+                  </div>
+                  <p className="text-[11px] text-slate-300 mt-0.5">
+                    แตะปุ่มแชร์ (Share Icon) ด้านบน แล้วเลือก <strong>"เพิ่มไปยังหน้าจอโฮม (Add to Home Screen)"</strong>
+                  </p>
+                </div>
+
+                <div className="pt-2 border-t border-slate-700">
+                  <div className="font-bold text-sky-300 flex items-center gap-1">
+                    🤖 สำหรับ Android / แท็บเล็ต (Chrome):
+                  </div>
+                  <p className="text-[11px] text-slate-300 mt-0.5">
+                    แตะจุดสามจุด (⋮) มุมขวาบน แล้วเลือก <strong>"ติดตั้งแอป (Install App)"</strong> หรือ "เพิ่มลงในหน้าจอหลัก"
+                  </p>
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="mt-4 pt-3 border-t border-slate-700/80 flex items-center justify-between text-xs text-slate-400">
+          <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
             <span className="flex items-center gap-1 text-emerald-400 font-bold">
               <CheckCircle2 className="w-4 h-4" />
-              <span>พร้อมสำหรับการ Deploy</span>
+              <span>โหมดออฟไลน์ (Offline-First) ทำงานอัตโนมัติ</span>
             </span>
-            <span className="text-[11px]">PWA & Offline Ready</span>
+            <span className="text-[11px] text-slate-500">v1.0.0</span>
           </div>
         </div>
       </div>

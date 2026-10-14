@@ -7,16 +7,20 @@ import {
   RotateCcw, 
   Calendar, 
   CheckCircle2,
-  Award
+  Award,
+  Edit3,
+  Trash2
 } from 'lucide-react'
 import { getTodayOrders } from '../lib/db'
 import { usePosStore } from '../store/usePosStore'
 import { SPICY_LEVELS } from '../lib/constants'
 import type { Order } from '../types'
+import { EditOrderModal } from './EditOrderModal'
 
 export const SalesReportView: React.FC = () => {
-  const { openReceiptModal, spicyOptions } = usePosStore()
+  const { openReceiptModal, spicyOptions, deleteExistingOrder } = usePosStore()
   const [orders, setOrders] = useState<Order[]>([])
+  const [editingOrder, setEditingOrder] = useState<Order | null>(null)
 
   const loadData = async () => {
     try {
@@ -272,7 +276,7 @@ export const SalesReportView: React.FC = () => {
                 <th className="py-3 px-4">ระดับความเผ็ด & ตัวเลือกพิเศษ</th>
                 <th className="py-3 px-4">ยอดสุทธิ</th>
                 <th className="py-3 px-4">ชำระโดย</th>
-                <th className="py-3 px-4 text-center">พิมพ์ซ้ำ</th>
+                <th className="py-3 px-4 text-center">จัดการ / พิมพ์</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -319,13 +323,34 @@ export const SalesReportView: React.FC = () => {
                     </span>
                   </td>
                   <td className="py-3 px-4 text-center">
-                    <button
-                      onClick={() => openReceiptModal(o)}
-                      className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors"
-                      title="ดูและพิมพ์ใบเสร็จ"
-                    >
-                      <Printer className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center justify-center gap-1.5">
+                      <button
+                        onClick={() => setEditingOrder(o)}
+                        className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 transition-colors cursor-pointer"
+                        title="แก้ไขบิล / ปรับราคา / แก้เมนู"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => openReceiptModal(o)}
+                        className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
+                        title="ดูและพิมพ์ใบเสร็จ"
+                      >
+                        <Printer className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (window.confirm(`ยืนยันการลบบิล ${o.orderNumber} หรือไม่?\nยอดเงิน ${o.grandTotal} บาทจะถูกหักออกจากรายงานการขายและสถานะโต๊ะ`)) {
+                            await deleteExistingOrder(o.id)
+                            await loadData()
+                          }
+                        }}
+                        className="p-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 transition-colors cursor-pointer"
+                        title="ลบบิลนี้"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -333,6 +358,21 @@ export const SalesReportView: React.FC = () => {
           </table>
         </div>
       </div>
+
+      {/* Edit Order Modal */}
+      <EditOrderModal
+        order={editingOrder}
+        isOpen={!!editingOrder}
+        onClose={() => setEditingOrder(null)}
+        onSaveSuccess={() => {
+          setEditingOrder(null)
+          loadData()
+        }}
+        onDeleteSuccess={() => {
+          setEditingOrder(null)
+          loadData()
+        }}
+      />
     </div>
   )
 }

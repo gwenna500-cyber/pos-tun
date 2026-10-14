@@ -11,12 +11,15 @@ import {
   Sparkles,
   ExternalLink,
   Lock,
-  Flame
+  Flame,
+  Edit3,
+  Trash2
 } from 'lucide-react'
 import { usePosStore } from '../store/usePosStore'
 import { db } from '../lib/db'
 import { SPICY_LEVELS } from '../lib/constants'
 import type { Order, PaymentMethod, CartItem } from '../types'
+import { EditOrderModal } from './EditOrderModal'
 
 export const TableStatusModal: React.FC = () => {
   const { 
@@ -28,7 +31,8 @@ export const TableStatusModal: React.FC = () => {
     clearTableSession, 
     openTableSession,
     openReceiptModal,
-    spicyOptions
+    spicyOptions,
+    deleteExistingOrder
   } = usePosStore()
 
   const [activeTab, setActiveTab] = useState<'all' | 'occupied' | 'billed' | 'available'>('all')
@@ -36,6 +40,7 @@ export const TableStatusModal: React.FC = () => {
   const [billingPaymentMethod, setBillingPaymentMethod] = useState<PaymentMethod>('cash')
   const [isPaymentMethodLocked, setIsPaymentMethodLocked] = useState(true)
   const [isProcessing, setIsProcessing] = useState(false)
+  const [editingOrderForTable, setEditingOrderForTable] = useState<Order | null>(null)
   
   // Table orders preview
   const [selectedTableOrders, setSelectedTableOrders] = useState<{ table: string; orders: Order[] } | null>(null)
@@ -912,11 +917,56 @@ export const TableStatusModal: React.FC = () => {
 
                       <button
                         onClick={() => openReceiptModal(order)}
-                        className="w-full mt-1 py-2 rounded-xl bg-white border border-slate-300 text-slate-700 font-bold text-[11px] flex items-center justify-center gap-1.5 hover:bg-slate-100 active:scale-[0.99] transition-all cursor-pointer shadow-2xs"
+                        className="hidden"
                       >
                         <Printer className="w-3.5 h-3.5" />
-                        <span>พิมพ์ใบเสร็จบิลนี้</span>
                       </button>
+
+                      <div className="grid grid-cols-3 gap-1.5 mt-1">
+                        <button
+                          type="button"
+                          onClick={() => setEditingOrderForTable(order)}
+                          className="py-2 px-2 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 font-bold text-[11px] flex items-center justify-center gap-1 active:scale-[0.99] transition-all cursor-pointer shadow-2xs"
+                          title="แก้ไขบิล ปรับราคา หรือเปลี่ยนเมนู"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                          <span>แก้ไขบิล</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openReceiptModal(order)}
+                          className="py-2 px-2 rounded-xl bg-white border border-slate-300 text-slate-700 font-bold text-[11px] flex items-center justify-center gap-1 hover:bg-slate-100 active:scale-[0.99] transition-all cursor-pointer shadow-2xs"
+                          title="พิมพ์ใบเสร็จบิลนี้"
+                        >
+                          <Printer className="w-3.5 h-3.5" />
+                          <span>พิมพ์ใบเสร็จ</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (window.confirm(`ยืนยันการลบบิล ${order.orderNumber} หรือไม่?\nยอดเงิน ${order.grandTotal} บาทจะถูกหักออกจากโต๊ะนี้`)) {
+                              await deleteExistingOrder(order.id)
+                              const orders = await db.orders.toArray()
+                              setAllRecentOrders(orders)
+                              if (selectedTableOrders) {
+                                const updated = orders.filter(o => {
+                                  const isMatch = o.tableNumber === selectedTableOrders.table || o.tableOrQueue === selectedTableOrders.table
+                                  return isMatch && o.status !== 'cancelled' && o.id !== order.id
+                                })
+                                setSelectedTableOrders({
+                                  table: selectedTableOrders.table,
+                                  orders: updated
+                                })
+                              }
+                            }
+                          }}
+                          className="py-2 px-2 rounded-xl bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 font-bold text-[11px] flex items-center justify-center gap-1 active:scale-[0.99] transition-all cursor-pointer shadow-2xs"
+                          title="ลบบิลนี้"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>ลบบิล</span>
+                        </button>
+                      </div>
                     </div>
                   )
                 })
@@ -934,6 +984,43 @@ export const TableStatusModal: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Edit Order Modal */}
+      <EditOrderModal
+        order={editingOrderForTable}
+        isOpen={!!editingOrderForTable}
+        onClose={() => setEditingOrderForTable(null)}
+        onSaveSuccess={async () => {
+          setEditingOrderForTable(null)
+          const orders = await db.orders.toArray()
+          setAllRecentOrders(orders)
+          if (selectedTableOrders) {
+            const updated = orders.filter(o => {
+              const isMatch = o.tableNumber === selectedTableOrders.table || o.tableOrQueue === selectedTableOrders.table
+              return isMatch && o.status !== 'cancelled'
+            })
+            setSelectedTableOrders({
+              table: selectedTableOrders.table,
+              orders: updated
+            })
+          }
+        }}
+        onDeleteSuccess={async () => {
+          setEditingOrderForTable(null)
+          const orders = await db.orders.toArray()
+          setAllRecentOrders(orders)
+          if (selectedTableOrders) {
+            const updated = orders.filter(o => {
+              const isMatch = o.tableNumber === selectedTableOrders.table || o.tableOrQueue === selectedTableOrders.table
+              return isMatch && o.status !== 'cancelled'
+            })
+            setSelectedTableOrders({
+              table: selectedTableOrders.table,
+              orders: updated
+            })
+          }
+        }}
+      />
     </div>
   )
 }

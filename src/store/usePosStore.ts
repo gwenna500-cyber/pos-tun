@@ -35,7 +35,9 @@ import {
   resetSpicyToDefaultsInDb,
   getTableSessionsFromDb,
   saveTableSessionsToDb,
-  updateOrderStatusInDb
+  updateOrderStatusInDb,
+  updateOrderInDb,
+  deleteOrderFromDb
 } from '../lib/db'
 import { 
   pushOrderToFirebase, 
@@ -44,7 +46,9 @@ import {
   syncSpicyOptionsToFirebase,
   updateFirebaseTableSession,
   subscribeToFirebaseTableSessions,
-  updateFirebaseOrderStatus
+  updateFirebaseOrderStatus,
+  updateFirebaseOrder,
+  deleteFirebaseOrder
 } from '../lib/firebase'
 import { triggerHaptic, playTapSound, playSuccessChime } from '../lib/soundAndHaptic'
 import { bluetoothPrinter } from '../lib/bluetoothPrinter'
@@ -132,6 +136,10 @@ interface PosState {
   clearTableSession: (tableNumber: string) => Promise<void>
   openTableSession: (tableNumber: string) => Promise<string>
   loadTableSessions: () => Promise<void>
+
+  // Order Editing and Management
+  updateExistingOrder: (updatedOrder: Order) => Promise<void>
+  deleteExistingOrder: (orderId: string) => Promise<void>
 
   // Checkout process
   finalizeCheckout: (paymentMethod: PaymentMethod, cashReceived?: number) => Promise<Order | null>
@@ -609,6 +617,84 @@ export const usePosStore = create<PosState>((set, get) => ({
           saveTableSessionsToDb(cloudSessions).catch(console.error)
         }
       })
+    }
+  },
+
+  // Edit and Delete Order management
+  updateExistingOrder: async (updatedOrder: Order) => {
+    // 1. Update in IndexedDB
+    await updateOrderInDb(updatedOrder)
+
+    // 2. Update in Firebase
+    if (isFirebaseReady()) {
+      await updateFirebaseOrder(updatedOrder)
+    }
+
+    // 3. Recalculate table session if this order belongs to a table
+    const table = updatedOrder.tableNumber || (updatedOrder.tableOrQueue?.startsWith('โต๊ะ') ? updatedOrder.tableOrQueue : null)
+    if (table) {
+      const allOrders = await db.orders.toArray()
+      const tableOrders = allOrders.filter(
+        o => (o.tableNumber === table || o.tableOrQueue === table) && o.status !== 'cancelled'
+      )
+      const mappedOrders = tableOrders.map(o => o.id === updatedOrder.id ? updatedOrder : o)
+      const newTotal = mappedOrders.reduce((sum, o) => sum + o.grandTotal, 0)
+      const currentSession = get().tableSessions[table]
+      if (currentSession) {
+        const nextSession: TableSession = {
+          ...currentSession,
+          totalAmount: newTotal,
+          orderCount: mappedOrders.length
+        }
+        const nextSessions = { ...get().tableSessions, [table]: nextSession }
+        set({ tableSessions: nextSessions })
+        await saveTableSessionsToDb(nextSessions)
+        if (isFirebaseReady()) {
+          await updateFirebaseTableSession(nextSession)
+        }
+        try {
+          localStorage.setItem('pos_broadcast_table_sessions', JSON.stringify({ timestamp: Date.now(), sessions: nextSessions }))
+        } catch {}
+      }
+    }
+  },
+
+  deleteExistingOrder: async (orderId: string) => {
+    const order = await db.orders.get(orderId)
+    // 1. Delete from IndexedDB
+    await deleteOrderFromDb(orderId)
+
+    // 2. Delete from Firebase
+    if (isFirebaseReady()) {
+      await deleteFirebaseOrder(orderId)
+    }
+
+    // 3. Recalculate table session if this order belongs to a table
+    const table = order?.tableNumber || (order?.tableOrQueue?.startsWith('โต๊ะ') ? order.tableOrQueue : null)
+    if (table) {
+      const allOrders = await db.orders.toArray()
+      const remainingTableOrders = allOrders.filter(
+        o => o.id !== orderId && (o.tableNumber === table || o.tableOrQueue === table) && o.status !== 'cancelled'
+      )
+      const newTotal = remainingTableOrders.reduce((sum, o) => sum + o.grandTotal, 0)
+      const currentSession = get().tableSessions[table]
+      if (currentSession) {
+        const nextSession: TableSession = {
+          ...currentSession,
+          totalAmount: newTotal,
+          orderCount: remainingTableOrders.length,
+          status: remainingTableOrders.length === 0 ? 'available' : currentSession.status
+        }
+        const nextSessions = { ...get().tableSessions, [table]: nextSession }
+        set({ tableSessions: nextSessions })
+        await saveTableSessionsToDb(nextSessions)
+        if (isFirebaseReady()) {
+          await updateFirebaseTableSession(nextSession)
+        }
+        try {
+          localStorage.setItem('pos_broadcast_table_sessions', JSON.stringify({ timestamp: Date.now(), sessions: nextSessions }))
+        } catch {}
+      }
     }
   },
 

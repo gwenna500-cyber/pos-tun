@@ -106,6 +106,19 @@ export async function updateOrderStatusInDb(orderId: string, status: Order['stat
   await db.orders.update(orderId, updates)
 }
 
+// Update full order details in IndexedDB
+export async function updateOrderInDb(updatedOrder: Order): Promise<void> {
+  await db.orders.put({
+    ...updatedOrder,
+    updatedAt: Date.now()
+  })
+}
+
+// Delete order from IndexedDB
+export async function deleteOrderFromDb(orderId: string): Promise<void> {
+  await db.orders.delete(orderId)
+}
+
 // Menu items CRUD
 export async function getAllMenuItemsFromDb(): Promise<MenuItem[]> {
   try {

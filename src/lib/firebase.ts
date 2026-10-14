@@ -5,6 +5,7 @@ import {
   ref, 
   set, 
   update, 
+  remove,
   onValue, 
   off, 
   type Database 
@@ -91,6 +92,35 @@ export async function updateFirebaseOrderStatus(orderId: string, status: Order['
     return true
   } catch (error) {
     console.warn('[Firebase] Could not update order status in Firebase:', error)
+    return false
+  }
+}
+
+// Update full order details in Firebase (for bill editing)
+export async function updateFirebaseOrder(order: Order): Promise<boolean> {
+  if (!isFirebaseReady() || !realtimeDb) return false
+  try {
+    const orderRef = ref(realtimeDb, `orders/${order.id}`)
+    await update(orderRef, {
+      ...order,
+      updatedAt: Date.now()
+    })
+    return true
+  } catch (error) {
+    console.warn('[Firebase] Could not update order in Firebase:', error)
+    return false
+  }
+}
+
+// Delete order from Firebase (for bill deletion/cancellation)
+export async function deleteFirebaseOrder(orderId: string): Promise<boolean> {
+  if (!isFirebaseReady() || !realtimeDb) return false
+  try {
+    const orderRef = ref(realtimeDb, `orders/${orderId}`)
+    await remove(orderRef)
+    return true
+  } catch (error) {
+    console.warn('[Firebase] Could not delete order from Firebase:', error)
     return false
   }
 }

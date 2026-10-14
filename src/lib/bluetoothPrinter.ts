@@ -123,6 +123,11 @@ export class BluetoothPrinterService {
       addText(`[สั่งผ่าน QR โต๊ะ] ${order.tableOrQueue || 'ทานที่ร้าน'}\n`)
     }
     
+    if (order.spicyLevel) {
+      const sp = SPICY_LEVELS.find(s => s.id === order.spicyLevel)?.label.split(' ')[0] || order.spicyLevel
+      addText(`ความเผ็ด: ${sp}\n`)
+    }
+
     if (order.orderAddons && order.orderAddons.length > 0) {
       addText(`พิเศษ: ${order.orderAddons.join(', ')}\n`)
     }

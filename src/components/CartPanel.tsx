@@ -7,7 +7,8 @@ import {
   CreditCard, 
   X,
   Check,
-  Sparkles
+  Sparkles,
+  Flame
 } from 'lucide-react'
 import { usePosStore } from '../store/usePosStore'
 import { SPICY_LEVELS, DINING_TYPES } from '../lib/constants'
@@ -32,6 +33,8 @@ export const CartPanel: React.FC<CartPanelProps> = ({ isMobileDrawer = false }) 
     openPaymentModal,
     toggleMobileCart,
     spicyOptions,
+    spicyLevel,
+    setSpicyLevel,
     orderAddons,
     toggleOrderAddon
   } = usePosStore()
@@ -189,6 +192,33 @@ export const CartPanel: React.FC<CartPanelProps> = ({ isMobileDrawer = false }) 
                 </button>
               ))}
             </div>
+          </div>
+        </div>
+
+        {/* Spicy Level (ตอนกำลังจะคิดตังค์) */}
+        <div>
+          <label className="block text-[11px] font-bold text-slate-700 mb-1 flex items-center justify-between">
+            <span className="flex items-center gap-1">
+              <Flame className="w-3.5 h-3.5 text-red-600" />
+              <span>ระดับความเผ็ดของบิลนี้:</span>
+            </span>
+            <span className="text-[10px] text-red-600 font-semibold">*เลือก 1 อย่าง</span>
+          </label>
+          <div className="grid grid-cols-3 gap-1">
+            {spicyOptions.filter(s => s.isAvailable !== false && s.id !== 'dry' && s.id !== 'extra_sesame').map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => setSpicyLevel(s.id)}
+                className={`py-1.5 px-1.5 rounded-lg text-xs font-bold transition-all truncate border text-center cursor-pointer ${
+                  spicyLevel === s.id
+                    ? 'bg-red-600 text-white border-red-600 shadow-2xs ring-1 ring-red-300'
+                    : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                {s.label.split(' ')[0]}
+              </button>
+            ))}
           </div>
         </div>
 

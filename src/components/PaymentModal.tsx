@@ -7,7 +7,8 @@ import {
   Copy, 
   Check, 
   Tag,
-  Sparkles
+  Sparkles,
+  Flame
 } from 'lucide-react'
 import { usePosStore } from '../store/usePosStore'
 import { generatePromptPayQrDataUrl } from '../lib/promptpay'
@@ -23,7 +24,10 @@ export const PaymentModal: React.FC = () => {
     shopSettings, 
     finalizeCheckout,
     orderAddons,
-    toggleOrderAddon
+    toggleOrderAddon,
+    spicyLevel,
+    setSpicyLevel,
+    spicyOptions
   } = usePosStore()
 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('promptpay')
@@ -238,6 +242,33 @@ export const PaymentModal: React.FC = () => {
               )}
             </div>
           )}
+
+          {/* Spicy Level (ตอนกำลังจะคิดตังค์) */}
+          <div className="bg-red-50/80 p-3 rounded-2xl border border-red-200">
+            <div className="text-xs font-bold text-red-950 mb-1.5 flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <Flame className="w-3.5 h-3.5 text-red-600" />
+                <span>ระดับความเผ็ดของบิลนี้:</span>
+              </span>
+              <span className="text-[10px] text-red-600 font-semibold">*เลือก 1 อย่าง</span>
+            </div>
+            <div className="grid grid-cols-3 gap-1.5">
+              {spicyOptions.filter(s => s.isAvailable !== false && s.id !== 'dry' && s.id !== 'extra_sesame').map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => setSpicyLevel(s.id)}
+                  className={`py-2 px-1.5 rounded-xl text-xs font-bold transition-all truncate border text-center cursor-pointer ${
+                    spicyLevel === s.id
+                      ? 'bg-red-600 text-white border-red-600 shadow-xs ring-2 ring-red-300'
+                      : 'bg-white border-red-200 text-slate-700 hover:bg-red-50'
+                  }`}
+                >
+                  {s.label.split(' ')[0]}
+                </button>
+              ))}
+            </div>
+          </div>
 
           {/* Order Addons (ตัวเลือกพิเศษตอนกำลังจะคิดตังค์) */}
           <div className="bg-amber-50/80 p-3 rounded-2xl border border-amber-200">

@@ -263,6 +263,17 @@ export const KitchenView: React.FC = () => {
                     </span>
                   </div>
 
+                  {/* Order Spicy Level (ระดับความเผ็ดของบิลนี้) */}
+                  {order.spicyLevel && (
+                    <div className="px-3.5 py-2 bg-gradient-to-r from-red-50 to-orange-50 text-red-950 border-b border-red-200 flex items-center gap-2">
+                      <Flame className="w-4 h-4 text-red-600 flex-shrink-0" />
+                      <span className="text-xs font-bold text-red-900">ระดับความเผ็ด:</span>
+                      <span className="px-2.5 py-0.5 rounded-lg text-xs font-black bg-red-600 text-white shadow-2xs">
+                        {spicyOptions.find(s => s.id === order.spicyLevel)?.label || SPICY_LEVELS.find(s => s.id === order.spicyLevel)?.label || order.spicyLevel}
+                      </span>
+                    </div>
+                  )}
+
                   {/* Order Addons (ตัวเลือกพิเศษของบิล เช่น โรยงาขาวคั่วเยอะๆ, ทอดกรอบแห้งพิเศษ) */}
                   {order.orderAddons && order.orderAddons.length > 0 && (
                     <div className="px-3.5 py-2 bg-gradient-to-r from-amber-50 to-orange-50 text-amber-950 border-b border-amber-200 flex items-center gap-1.5 flex-wrap">

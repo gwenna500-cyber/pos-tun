@@ -1,24 +1,13 @@
 import React, { useState, useMemo } from 'react'
-import { Search, Plus, Minus, X, Flame, Check } from 'lucide-react'
+import { Search, Plus } from 'lucide-react'
 import { MENU_CATEGORIES } from '../lib/constants'
 import { usePosStore } from '../store/usePosStore'
-import type { MenuItem, SpicyLevel } from '../types'
+import type { MenuItem } from '../types'
 
 export const MenuCatalog: React.FC = () => {
-  const { menuItems, cart, addMenuItem, spicyOptions } = usePosStore()
+  const { menuItems, cart, addMenuItem } = usePosStore()
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
   const [searchQuery, setSearchQuery] = useState<string>('')
-
-  // Active (in-stock) spicy options (genuine spice levels only)
-  const activeSpicyOptions = useMemo(() => {
-    return spicyOptions.filter(s => s.isAvailable !== false && s.id !== 'dry' && s.id !== 'extra_sesame')
-  }, [spicyOptions])
-
-  // Modal state for selecting spicy level when choosing an item
-  const [activeItem, setActiveItem] = useState<MenuItem | null>(null)
-  const [selectedSpicy, setSelectedSpicy] = useState<SpicyLevel>('medium')
-  const [itemQty, setItemQty] = useState<number>(1)
-  const [itemNote, setItemNote] = useState<string>('')
 
   // Filtered menu items
   const filteredItems = useMemo(() => {
@@ -30,37 +19,20 @@ export const MenuCatalog: React.FC = () => {
     })
   }, [menuItems, selectedCategory, searchQuery])
 
-  // Get total quantity in cart for a menu item (combining all spicy levels)
+  // Get total quantity in cart for a menu item
   const getItemCartQty = (itemId: string) => {
     return cart
       .filter(c => c.menuItemId === itemId)
       .reduce((sum, c) => sum + c.quantity, 0)
   }
 
-  // Handle clicking an item card
+  // Handle clicking an item card (direct add, spicy is chosen at checkout)
   const handleItemClick = (item: MenuItem) => {
     if (item.isAvailable === false) {
       alert(`ขออภัย เมนู "${item.name}" สินค้าหมดชั่วคราว`)
       return
     }
-
-    if (item.category === 'drink') {
-      // Drinks don't need spicy level
-      addMenuItem(item)
-    } else {
-      // Open spicy selection modal
-      setActiveItem(item)
-      setSelectedSpicy(activeSpicyOptions[0]?.id || 'medium')
-      setItemQty(1)
-      setItemNote('')
-    }
-  }
-
-  // Confirm adding item with chosen spicy level
-  const handleConfirmAdd = () => {
-    if (!activeItem) return
-    addMenuItem(activeItem, selectedSpicy, itemNote.trim(), itemQty)
-    setActiveItem(null)
+    addMenuItem(item)
   }
 
   // Get Category Name for item
@@ -161,7 +133,7 @@ export const MenuCatalog: React.FC = () => {
               {/* Bottom Action Area */}
               <div className="mt-3.5 pt-2 border-t border-slate-100 flex items-center justify-between">
                 <span className="text-[11px] font-medium text-slate-400">
-                  {item.category === 'drink' ? 'แตะเพิ่มทันที' : 'แตะเลือกระดับเผ็ด'}
+                  แตะเพื่อสั่ง
                 </span>
                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${
                   qty > 0 
@@ -190,144 +162,6 @@ export const MenuCatalog: React.FC = () => {
           >
             แสดงเมนูทั้งหมด
           </button>
-        </div>
-      )}
-
-      {/* Spicy Level & Addons Selection Modal (Mobile Bottom Sheet / Desktop Centered Card) */}
-      {activeItem && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-end sm:items-center justify-center sm:p-4 animate-fade-in">
-          {/* Backdrop click to dismiss */}
-          <div className="fixed inset-0" onClick={() => setActiveItem(null)} />
-
-          <div className="relative z-10 bg-white w-full rounded-t-3xl sm:rounded-3xl sm:max-w-md shadow-2xl border border-slate-200 flex flex-col max-h-[90vh] sm:max-h-[92vh] overflow-hidden">
-            {/* Mobile Drag Handle */}
-            <div className="sm:hidden pt-2.5 pb-1 flex justify-center bg-slate-50">
-              <div className="w-12 h-1.5 bg-slate-300 rounded-full" />
-            </div>
-
-            {/* Modal Header */}
-            <div className="px-4 py-3 sm:p-4 bg-slate-50 border-b border-slate-200/80 flex items-center justify-between">
-              <div>
-                <span className="text-[11px] font-bold uppercase tracking-wider text-red-600">
-                  เลือกระดับความเผ็ด & ตัวเลือก
-                </span>
-                <h3 className="text-lg font-black text-slate-900 leading-tight">
-                  {activeItem.name}
-                </h3>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xl font-black text-emerald-600 tracking-tight">
-                  {activeItem.price * itemQty} <span className="text-sm font-bold text-emerald-600">฿</span>
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setActiveItem(null)}
-                  className="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center transition-colors cursor-pointer"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* Modal Scrollable Body */}
-            <div className="p-4 overflow-y-auto space-y-4 flex-1">
-              {/* Spicy Level & Flavor Options Grid (Single Choice) */}
-              <div>
-                <label className="block text-xs font-bold text-slate-800 mb-2 flex items-center gap-1.5">
-                  <Flame className="w-4 h-4 text-red-600" />
-                  <span>เลือกระดับความเผ็ด / รสชาติ:</span>
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  {activeSpicyOptions.map((spicy) => {
-                    const isSelected = selectedSpicy === spicy.id
-                    return (
-                      <button
-                        key={spicy.id}
-                        type="button"
-                        onClick={() => setSelectedSpicy(spicy.id)}
-                        className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                          isSelected
-                            ? 'bg-red-600 text-white border-red-600 shadow-md ring-2 ring-red-300'
-                            : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-800'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="font-black text-sm">
-                            {spicy.label}
-                          </span>
-                          {isSelected && <Check className="w-4 h-4 text-white" />}
-                        </div>
-                        {spicy.desc && (
-                          <span className={`text-[11px] mt-1 line-clamp-1 ${
-                            isSelected ? 'text-red-100' : 'text-slate-400'
-                          }`}>
-                            {spicy.desc}
-                          </span>
-                        )}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {/* Section 3: Quantity Selector */}
-              <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 border border-slate-200">
-                <span className="text-xs font-bold text-slate-700">จำนวนที่ต้องการ:</span>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setItemQty(Math.max(1, itemQty - 1))}
-                    className="w-9 h-9 rounded-xl bg-white border border-slate-300 flex items-center justify-center text-slate-700 font-bold active:scale-95 cursor-pointer"
-                  >
-                    <Minus className="w-4 h-4" />
-                  </button>
-                  <span className="w-8 text-center font-black text-lg text-slate-900">
-                    {itemQty}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setItemQty(itemQty + 1)}
-                    className="w-9 h-9 rounded-xl bg-white border border-slate-300 flex items-center justify-center text-slate-700 font-bold active:scale-95 cursor-pointer"
-                  >
-                    <Plus className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Section 4: Special Note (Optional) */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  หมายเหตุเพิ่มเติม (ถ้ามี):
-                </label>
-                <input
-                  type="text"
-                  value={itemNote}
-                  onChange={(e) => setItemNote(e.target.value)}
-                  placeholder="เช่น ไม่ใส่กระเทียม, แยกน้ำมัน"
-                  className="w-full h-10 px-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-red-500"
-                />
-              </div>
-            </div>
-
-            {/* Sticky Bottom Footer: Always visible on Mobile & iPad */}
-            <div className="sticky bottom-0 bg-white/95 backdrop-blur-xs p-3.5 border-t border-slate-200 flex gap-2 shadow-lg z-10">
-              <button
-                type="button"
-                onClick={() => setActiveItem(null)}
-                className="py-3 px-4 rounded-xl border border-slate-300 bg-white text-slate-700 font-bold text-sm hover:bg-slate-100 cursor-pointer"
-              >
-                ยกเลิก
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmAdd}
-                className="flex-1 py-3 px-4 rounded-xl bg-red-600 hover:bg-red-700 active:scale-[0.99] text-white font-black text-base shadow-md shadow-red-200 flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <Plus className="w-5 h-5" />
-                <span>เพิ่มลงตะกร้า ({activeItem.price * itemQty} ฿)</span>
-              </button>
-            </div>
-          </div>
         </div>
       )}
     </div>

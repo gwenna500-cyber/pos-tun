@@ -111,6 +111,11 @@ export const ReceiptSlip: React.FC = () => {
                     [สั่งผ่าน QR โต๊ะ] {order.tableOrQueue} {order.customerName && order.customerName !== order.tableOrQueue ? `(คุณ ${order.customerName})` : ''}
                   </div>
                 )}
+                {order.spicyLevel && (
+                  <div>
+                    ความเผ็ด: <strong>{spicyOptions.find(s => s.id === order.spicyLevel)?.label.split(' ')[0] || order.spicyLevel}</strong>
+                  </div>
+                )}
                 {order.orderAddons && order.orderAddons.length > 0 && (
                   <div className="text-amber-800 font-bold bg-amber-50 p-1 rounded border border-amber-200">
                     พิเศษ: {order.orderAddons.join(', ')}
@@ -228,6 +233,9 @@ export const ReceiptSlip: React.FC = () => {
 
         <div style={{ fontSize: '10px', marginBottom: '6px' }}>
           <div>เวลา: {formattedDate}</div>
+          {order.spicyLevel && (
+            <div>ความเผ็ด: {spicyOptions.find(s => s.id === order.spicyLevel)?.label.split(' ')[0] || order.spicyLevel}</div>
+          )}
           {order.orderAddons && order.orderAddons.length > 0 && (
             <div style={{ fontWeight: 'bold' }}>* พิเศษ: {order.orderAddons.join(', ')}</div>
           )}

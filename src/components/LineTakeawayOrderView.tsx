@@ -77,7 +77,6 @@ export const LineTakeawayOrderView: React.FC = () => {
 
   // Item Options Modal / Bottom Sheet
   const [activeItem, setActiveItem] = useState<MenuItem | null>(null)
-  const [selectedSpicy, setSelectedSpicy] = useState<SpicyLevel>('medium')
   const [itemQty, setItemQty] = useState<number>(1)
   const [itemNote, setItemNote] = useState<string>('')
 
@@ -88,6 +87,7 @@ export const LineTakeawayOrderView: React.FC = () => {
   const [pickupOption, setPickupOption] = useState<string>('asap')
   const [customPickupTime, setCustomPickupTime] = useState('')
   const [orderNotes, setOrderNotes] = useState('')
+  const [checkoutSpicy, setCheckoutSpicy] = useState<string>('medium')
   const [customerOrderAddons, setCustomerOrderAddons] = useState<string[]>([])
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(
     initialParams.diningType === 'dine_in' ? 'cash' : 'promptpay'
@@ -115,19 +115,18 @@ export const LineTakeawayOrderView: React.FC = () => {
   const totalCartCount = customerCart.reduce((sum, item) => sum + item.quantity, 0)
   const totalCartPrice = customerCart.reduce((sum, item) => sum + item.price * item.quantity, 0)
 
-  // Available spicy options (authentic spice levels only; sesame & extra crispy are selected at checkout)
+  // Available spicy options (authentic spice levels only; chosen at checkout)
   const activeSpicyOptions = useMemo(() => {
     return spicyOptions.filter(s => s.isAvailable !== false && s.id !== 'dry' && s.id !== 'extra_sesame')
   }, [spicyOptions])
 
-  // Handle open item sheet
+  // Handle open item sheet for quantity & notes
   const handleItemClick = (item: MenuItem) => {
     if (item.category === 'drink') {
       // Direct add drinks
       addItemToCustomerCart(item, 'none', '', 1, [])
     } else {
       setActiveItem(item)
-      setSelectedSpicy(activeSpicyOptions[0]?.id || 'medium')
       setItemQty(1)
       setItemNote('')
     }
@@ -174,7 +173,7 @@ export const LineTakeawayOrderView: React.FC = () => {
 
   const handleConfirmAddItem = () => {
     if (!activeItem) return
-    addItemToCustomerCart(activeItem, selectedSpicy, itemNote.trim(), itemQty, [])
+    addItemToCustomerCart(activeItem, 'none', itemNote.trim(), itemQty, [])
     setActiveItem(null)
   }
 
@@ -248,7 +247,8 @@ export const LineTakeawayOrderView: React.FC = () => {
         items: customerCart,
         paymentMethod,
         paymentStatus: paymentMethod === 'promptpay' ? 'paid' : 'pending',
-        orderAddons: customerOrderAddons
+        orderAddons: customerOrderAddons,
+        spicyLevel: checkoutSpicy
       })
 
       // Save customer session token locally
@@ -319,16 +319,22 @@ export const LineTakeawayOrderView: React.FC = () => {
                 <span>👤 คุณ: {completedOrder.customerName} · ⏰ รับ: {completedOrder.pickupTime}</span>
               )}
             </div>
-            {completedOrder.orderAddons && completedOrder.orderAddons.length > 0 && (
-              <div className="mt-2 pt-2 border-t border-red-500/40 text-xs text-red-100 flex items-center justify-center gap-1.5 flex-wrap">
-                <span className="font-bold">✨ พิเศษ:</span>
-                {completedOrder.orderAddons.map((addon, idx) => (
-                  <span key={idx} className="bg-white/20 px-2 py-0.5 rounded-md font-bold">
-                    {addon.includes('งา') ? `🌾 ${addon}` : addon.includes('กรอบ') ? `🍟 ${addon}` : addon}
-                  </span>
-                ))}
-              </div>
-            )}
+            <div className="mt-2 pt-2 border-t border-red-500/40 text-xs text-red-100 flex items-center justify-center gap-1.5 flex-wrap">
+              <span className="font-bold">🔥 ความเผ็ด:</span>
+              <span className="bg-white/20 px-2 py-0.5 rounded-md font-bold">
+                {spicyOptions.find(s => s.id === completedOrder.spicyLevel)?.label.split(' ')[0] || completedOrder.spicyLevel || 'เผ็ดกลาง'}
+              </span>
+              {completedOrder.orderAddons && completedOrder.orderAddons.length > 0 && (
+                <>
+                  <span className="font-bold ml-1.5">✨ พิเศษ:</span>
+                  {completedOrder.orderAddons.map((addon, idx) => (
+                    <span key={idx} className="bg-white/20 px-2 py-0.5 rounded-md font-bold">
+                      {addon.includes('งา') ? `🌾 ${addon}` : addon.includes('กรอบ') ? `🍟 ${addon}` : addon}
+                    </span>
+                  ))}
+                </>
+              )}
+            </div>
           </div>
 
           {/* PromptPay QR Section (if paying with promptpay) */}
@@ -733,8 +739,8 @@ export const LineTakeawayOrderView: React.FC = () => {
             {/* Header */}
             <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
               <div>
-                <span className="text-[11px] font-bold text-red-600 uppercase tracking-wider">
-                  เลือกระดับความเผ็ด & รสชาติ
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                  เลือกจำนวน & โน้ตเมนู
                 </span>
                 <h3 className="text-base font-black text-slate-900">{activeItem.name}</h3>
               </div>
@@ -753,44 +759,6 @@ export const LineTakeawayOrderView: React.FC = () => {
 
             {/* Body */}
             <div className="p-4 overflow-y-auto space-y-4 flex-1">
-              {/* Spicy & Flavor Options Grid */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                    <Flame className="w-4 h-4 text-red-600" />
-                    <span>เลือกระดับความเผ็ด / รสชาติ:</span>
-                  </label>
-                  <span className="text-[10px] text-red-600 font-bold">*เลือก 1 อย่าง</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  {activeSpicyOptions.map(spicy => {
-                    const isSelected = selectedSpicy === spicy.id
-                    return (
-                      <button
-                        key={spicy.id}
-                        type="button"
-                        onClick={() => setSelectedSpicy(spicy.id)}
-                        className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                          isSelected
-                            ? 'bg-red-600 text-white border-red-600 shadow-md ring-2 ring-red-300'
-                            : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-800'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="font-black text-xs sm:text-sm">{spicy.label}</span>
-                          {isSelected && <Check className="w-3.5 h-3.5 text-white" />}
-                        </div>
-                        {spicy.desc && (
-                          <span className={`text-[10px] mt-1 line-clamp-1 ${isSelected ? 'text-red-100' : 'text-slate-400'}`}>
-                            {spicy.desc}
-                          </span>
-                        )}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-
               {/* Quantity */}
               <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 border border-slate-200">
                 <span className="text-xs font-bold text-slate-700">จำนวนที่ต้องการ:</span>
@@ -1134,6 +1102,46 @@ export const LineTakeawayOrderView: React.FC = () => {
                   </div>
                 </div>
               )}
+
+              {/* ระดับความเผ็ด / รสชาติของบิลนี้ (ตอนคิดตัง) */}
+              <div className="bg-red-50/70 p-3.5 rounded-2xl border border-red-200/80 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-black text-red-950 flex items-center gap-1.5">
+                    <Flame className="w-4 h-4 text-red-600" />
+                    <span>เลือกระดับความเผ็ด / รสชาติของบิลนี้:</span>
+                  </label>
+                  <span className="text-[10px] font-bold text-red-600 bg-red-100 px-2 py-0.5 rounded-md">
+                    *เลือก 1 อย่าง
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {activeSpicyOptions.map(spicy => {
+                    const isSelected = checkoutSpicy === spicy.id
+                    return (
+                      <button
+                        key={spicy.id}
+                        type="button"
+                        onClick={() => setCheckoutSpicy(spicy.id)}
+                        className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                          isSelected
+                            ? 'bg-red-600 text-white border-red-600 shadow-md ring-2 ring-red-300'
+                            : 'bg-white border-red-200 hover:bg-red-50 text-slate-800'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-black text-xs sm:text-sm">{spicy.label}</span>
+                          {isSelected && <Check className="w-3.5 h-3.5 text-white" />}
+                        </div>
+                        {spicy.desc && (
+                          <span className={`text-[10px] mt-1 line-clamp-1 ${isSelected ? 'text-red-100' : 'text-slate-400'}`}>
+                            {spicy.desc}
+                          </span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
 
               {/* Extra Bill Options (ตอนกำลังจะคิดตังค์) */}
               <div className="bg-amber-50/80 p-3.5 rounded-2xl border border-amber-200/90 space-y-2">

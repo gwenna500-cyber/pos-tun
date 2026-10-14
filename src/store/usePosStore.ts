@@ -143,6 +143,7 @@ interface PosState {
     pickupTime?: string
     notes?: string
     orderAddons?: string[]
+    spicyLevel?: SpicyLevel
     items: CartItem[]
     paymentMethod: PaymentMethod
     paymentStatus?: 'paid' | 'pending'
@@ -793,6 +794,7 @@ export const usePosStore = create<PosState>((set, get) => ({
       grandTotal,
       diningType: orderData.diningType,
       notes: orderData.notes || '',
+      spicyLevel: orderData.spicyLevel || 'medium',
       orderAddons: orderData.orderAddons && orderData.orderAddons.length > 0 ? orderData.orderAddons : undefined,
       paymentMethod: orderData.paymentMethod,
       paymentStatus: orderData.paymentStatus || 'pending',

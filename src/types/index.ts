@@ -50,6 +50,7 @@ export interface CartItem {
   name: string
   price: number
   quantity: number
+  spicyLevel?: SpicyLevel
   stickColorId?: StickColorId
   category?: string
   note?: string
@@ -71,14 +72,14 @@ export interface Order {
   orderNumber: string       // e.g. "Q-001"
   tableOrQueue: string      // e.g. "คิว 1" or "โต๊ะ 4"
   items: CartItem[]
-  totalItemsCount: number   // จำนวนไม้/รายการรวม
+  totalItemsCount: number   // จำนวนรายการรวม
   subtotal: number
   discount: number
   grandTotal: number
   
   // Modifiers
-  spicyLevel: SpicyLevel
-  cookingMethod: CookingMethod
+  spicyLevel?: SpicyLevel
+  cookingMethod?: CookingMethod
   diningType: DiningType
   notes: string
 

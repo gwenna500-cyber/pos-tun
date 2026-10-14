@@ -3,13 +3,12 @@ import {
   Trash2, 
   Plus, 
   Minus, 
-  Flame, 
   ShoppingBag, 
   CreditCard, 
-  X 
+  X
 } from 'lucide-react'
 import { usePosStore } from '../store/usePosStore'
-import { SPICY_LEVELS, COOKING_METHODS, DINING_TYPES } from '../lib/constants'
+import { SPICY_LEVELS, DINING_TYPES } from '../lib/constants'
 
 interface CartPanelProps {
   isMobileDrawer?: boolean
@@ -21,10 +20,6 @@ export const CartPanel: React.FC<CartPanelProps> = ({ isMobileDrawer = false }) 
     incrementCartItem,
     decrementCartItem,
     clearCart,
-    spicyLevel,
-    setSpicyLevel,
-    cookingMethod,
-    setCookingMethod,
     diningType,
     setDiningType,
     customerQueue,
@@ -94,16 +89,30 @@ export const CartPanel: React.FC<CartPanelProps> = ({ isMobileDrawer = false }) 
           </div>
         ) : (
           cart.map((item) => {
+            const spicy = item.spicyLevel ? SPICY_LEVELS.find(s => s.id === item.spicyLevel) : null
+
             return (
               <div
                 key={item.cartItemId}
-                className="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-200/80 hover:border-slate-300 transition-colors"
+                className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 hover:border-slate-300 transition-colors"
               >
                 <div className="flex-1 min-w-0 pr-2">
-                  <h4 className="font-bold text-slate-900 text-sm truncate">
-                    {item.name}
-                  </h4>
-                  <span className="text-xs text-slate-500 font-medium">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <h4 className="font-bold text-slate-900 text-sm truncate">
+                      {item.name}
+                    </h4>
+                    {spicy && (
+                      <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-black border ${spicy.badgeClass}`}>
+                        {spicy.label.split(' ')[0]}
+                      </span>
+                    )}
+                  </div>
+                  {item.note && (
+                    <span className="text-[11px] text-amber-700 font-medium block truncate">
+                      โน้ต: {item.note}
+                    </span>
+                  )}
+                  <span className="text-xs text-slate-500 font-medium mt-0.5 block">
                     {item.price}฿ × {item.quantity} = <strong className="text-slate-800">{item.price * item.quantity}฿</strong>
                   </span>
                 </div>
@@ -132,7 +141,7 @@ export const CartPanel: React.FC<CartPanelProps> = ({ isMobileDrawer = false }) 
         )}
       </div>
 
-      {/* Cooking Modifiers & Order Settings */}
+      {/* Order Settings & Checkout */}
       <div className="border-t border-slate-200 pt-3 space-y-3 bg-white">
         {/* Dining Type & Table/Queue */}
         <div className="grid grid-cols-2 gap-2">
@@ -173,89 +182,16 @@ export const CartPanel: React.FC<CartPanelProps> = ({ isMobileDrawer = false }) 
           </div>
         </div>
 
-        {/* Cooking Method (ย่างหม่าล่า / ทอดกรอบ / ต้ม) */}
+        {/* General Notes Input */}
         <div>
           <label className="block text-[11px] font-bold text-slate-600 mb-1">
-            วิธีปรุงอาหาร
+            หมายเหตุของบิล
           </label>
-          <div className="grid grid-cols-3 gap-1.5">
-            {COOKING_METHODS.map((m) => {
-              const isSelected = cookingMethod === m.id
-              return (
-                <button
-                  key={m.id}
-                  onClick={() => setCookingMethod(m.id)}
-                  className={`py-1.5 px-2 rounded-lg text-xs font-bold transition-all text-center border ${
-                    isSelected
-                      ? 'bg-red-50 border-red-500 text-red-700 shadow-2xs'
-                      : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                  }`}
-                >
-                  {m.label.split(' ')[0]}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* Spicy Level (เผ็ดน้อย / เผ็ดกลาง / เผ็ดชา / พริกแยก) */}
-        <div>
-          <div className="flex items-center justify-between mb-1">
-            <label className="text-[11px] font-bold text-slate-600 flex items-center gap-1">
-              <Flame className="w-3.5 h-3.5 text-red-600" />
-              <span>ระดับความเผ็ดชา</span>
-            </label>
-            <span className="text-[10px] text-red-600 font-semibold">
-              {SPICY_LEVELS.find(s => s.id === spicyLevel)?.label}
-            </span>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1">
-            {SPICY_LEVELS.slice(0, 4).map((s) => {
-              const isSelected = spicyLevel === s.id
-              return (
-                <button
-                  key={s.id}
-                  onClick={() => setSpicyLevel(s.id)}
-                  className={`py-1.5 px-1 rounded-lg text-[11px] font-bold transition-all border text-center ${
-                    isSelected
-                      ? 'bg-red-600 border-red-600 text-white shadow-xs'
-                      : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                  }`}
-                >
-                  {s.label.split(' ')[0]}
-                </button>
-              )
-            })}
-          </div>
-
-          {/* Additional modifiers row (พริกแยก / ย่างแห้ง / โรยงา) */}
-          <div className="grid grid-cols-3 gap-1 mt-1">
-            {SPICY_LEVELS.slice(4).map((s) => {
-              const isSelected = spicyLevel === s.id
-              return (
-                <button
-                  key={s.id}
-                  onClick={() => setSpicyLevel(s.id)}
-                  className={`py-1 px-1 rounded-md text-[10px] font-semibold border transition-all text-center ${
-                    isSelected
-                      ? 'bg-red-600 border-red-600 text-white'
-                      : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100'
-                  }`}
-                >
-                  {s.label.split(' ')[0]}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* Notes Input */}
-        <div>
           <input
             type="text"
             value={orderNotes}
             onChange={(e) => setOrderNotes(e.target.value)}
-            placeholder="หมายเหตุเพิ่มเติม เช่น ไม่ใส่ผักชี, เกรียมๆ..."
+            placeholder="หมายเหตุเพิ่มเติมสำหรับบิลนี้..."
             className="w-full h-8 px-2.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-1 focus:ring-red-500"
           />
         </div>
@@ -278,7 +214,7 @@ export const CartPanel: React.FC<CartPanelProps> = ({ isMobileDrawer = false }) 
           </div>
         </div>
 
-        {/* Big Red Checkout Button (User requirement: bg-red-600 hover:bg-red-700 text-white h-16 font-bold text-xl) */}
+        {/* Big Red Checkout Button */}
         <button
           onClick={openPaymentModal}
           disabled={cart.length === 0}

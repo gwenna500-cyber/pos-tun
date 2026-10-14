@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import { usePosStore } from '../store/usePosStore'
 import { bluetoothPrinter, triggerBrowserPrint } from '../lib/bluetoothPrinter'
-import { SPICY_LEVELS, COOKING_METHODS } from '../lib/constants'
+import { SPICY_LEVELS } from '../lib/constants'
 
 export const ReceiptSlip: React.FC = () => {
   const { 
@@ -23,8 +23,6 @@ export const ReceiptSlip: React.FC = () => {
   if (!isReceiptModalOpen || !activeReceiptOrder) return null
 
   const order = activeReceiptOrder
-  const spicyInfo = SPICY_LEVELS.find(s => s.id === order.spicyLevel)?.label || order.spicyLevel
-  const cookInfo = COOKING_METHODS.find(m => m.id === order.cookingMethod)?.label || order.cookingMethod
   const formattedDate = new Date(order.createdAt).toLocaleString('th-TH', {
     dateStyle: 'medium',
     timeStyle: 'medium'
@@ -101,22 +99,25 @@ export const ReceiptSlip: React.FC = () => {
               {/* Order Info */}
               <div className="text-[10px] text-slate-500 space-y-0.5 pb-2 border-b border-dashed border-slate-300">
                 <div>เวลา: {formattedDate}</div>
-                <div>วิธีปรุง: <strong>{cookInfo}</strong></div>
-                <div>ความเผ็ด: <strong className="text-red-600">{spicyInfo}</strong></div>
                 {order.notes && <div>โน้ต: <strong>{order.notes}</strong></div>}
               </div>
 
               {/* Itemized list */}
               <div className="py-2 border-b border-dashed border-slate-300 space-y-1.5">
-                {order.items.map((item, idx) => (
-                  <div key={idx} className="flex justify-between items-start text-[11px]">
-                    <div className="flex-1 pr-1 truncate">
-                      <span>{item.name}</span>
-                      <span className="text-slate-500 ml-1">×{item.quantity}</span>
+                {order.items.map((item, idx) => {
+                  const spicy = item.spicyLevel ? SPICY_LEVELS.find(s => s.id === item.spicyLevel) : null
+                  return (
+                    <div key={idx} className="flex justify-between items-start text-[11px]">
+                      <div className="flex-1 pr-1 truncate">
+                        <span>{item.name}</span>
+                        {spicy && <span className="text-red-600 font-bold ml-1">[{spicy.label.split(' ')[0]}]</span>}
+                        {item.note && <span className="text-slate-400 block text-[9px]">({item.note})</span>}
+                        <span className="text-slate-500 ml-1">×{item.quantity}</span>
+                      </div>
+                      <span className="font-bold">{item.price * item.quantity}.-</span>
                     </div>
-                    <span className="font-bold">{item.price * item.quantity}.-</span>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
 
               {/* Totals */}
@@ -207,8 +208,6 @@ export const ReceiptSlip: React.FC = () => {
 
         <div style={{ fontSize: '10px', marginBottom: '6px' }}>
           <div>เวลา: {formattedDate}</div>
-          <div>วิธีปรุง: {cookInfo}</div>
-          <div>ความเผ็ด: {spicyInfo}</div>
           {order.notes && <div>หมายเหตุ: {order.notes}</div>}
         </div>
 
@@ -216,12 +215,17 @@ export const ReceiptSlip: React.FC = () => {
 
         {/* Items */}
         <div style={{ fontSize: '11px' }}>
-          {order.items.map((item, idx) => (
-            <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
-              <span>{item.name} x{item.quantity}</span>
-              <span>{item.price * item.quantity}.-</span>
-            </div>
-          ))}
+          {order.items.map((item, idx) => {
+            const spicy = item.spicyLevel ? SPICY_LEVELS.find(s => s.id === item.spicyLevel) : null
+            return (
+              <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                <span>
+                  {item.name} {spicy ? `[${spicy.label.split(' ')[0]}]` : ''} x{item.quantity}
+                </span>
+                <span>{item.price * item.quantity}.-</span>
+              </div>
+            )
+          })}
         </div>
 
         <div style={{ borderBottom: '1px dashed #000', margin: '6px 0' }} />

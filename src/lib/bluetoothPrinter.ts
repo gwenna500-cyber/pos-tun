@@ -1,5 +1,5 @@
 import type { Order, ShopSettings } from '../types'
-import { SPICY_LEVELS, COOKING_METHODS } from './constants'
+import { SPICY_LEVELS } from './constants'
 
 // ESC/POS Commands
 const ESC = 0x1B
@@ -115,18 +115,19 @@ export class BluetoothPrinterService {
     })
     addText(`เวลา: ${dateStr}\n`)
     
-    // Cooking modifier
-    const cookMethod = COOKING_METHODS.find(m => m.id === order.cookingMethod)?.label || order.cookingMethod
-    const spicyLevel = SPICY_LEVELS.find(s => s.id === order.spicyLevel)?.label || order.spicyLevel
-    addText(`วิธีปรุง: ${cookMethod}\n`)
-    addText(`ระดับเผ็ด: ${spicyLevel}\n`)
-    if (order.notes) addText(`หมายเหตุ: ${order.notes}\n`)
-    addText('--------------------------------\n')
+    if (order.notes) {
+      addText(`หมายเหตุ: ${order.notes}\n`)
+      addText('--------------------------------\n')
+    }
 
     // Items list
     order.items.forEach(item => {
       const lineTotal = item.price * item.quantity
-      const itemName = item.name.length > 16 ? item.name.slice(0, 16) + '..' : item.name
+      const spicy = item.spicyLevel ? SPICY_LEVELS.find(s => s.id === item.spicyLevel)?.label.split(' ')[0] : ''
+      const spicyStr = spicy ? `[${spicy}]` : ''
+      const noteStr = item.note ? ` (${item.note})` : ''
+      const rawName = `${item.name}${spicyStr}${noteStr}`
+      const itemName = rawName.length > 18 ? rawName.slice(0, 18) + '..' : rawName
       const qtyStr = `x${item.quantity}`
       const priceStr = `${lineTotal}.-`
       
@@ -161,7 +162,7 @@ export class BluetoothPrinterService {
     // Footer
     addText('\n')
     addText(`${settings.receiptFooter || 'ขอบคุณที่ใช้บริการ'}\n`)
-    addText('*** POS ตุ่น หม่าล่าเสียบไม้ ***\n')
+    addText('*** POS ตุ่น หม่าล่าทอดฟินเว่อร์ ***\n')
 
     // Feed lines & cut
     addBytes(ESC, 0x64, 4) // Feed 4 lines

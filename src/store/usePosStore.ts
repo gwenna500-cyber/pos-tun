@@ -37,7 +37,8 @@ interface PosState {
 
   // Actions for Cart
   addStickByColor: (colorId: StickColorId) => void
-  addMenuItem: (item: MenuItem) => void
+  addMenuItem: (item: MenuItem, spicyLevel?: SpicyLevel, note?: string, quantity?: number) => void
+  updateCartItemSpicy: (cartItemId: string, spicyLevel: SpicyLevel) => void
   incrementCartItem: (cartItemId: string) => void
   decrementCartItem: (cartItemId: string) => void
   removeCartItem: (cartItemId: string) => void
@@ -131,36 +132,49 @@ export const usePosStore = create<PosState>((set, get) => ({
     })
   },
 
-  addMenuItem: (item) => {
+  addMenuItem: (item, spicyLevel = 'medium', note = '', quantity = 1) => {
     const { shopSettings } = get()
     if (shopSettings.hapticEnabled) triggerHaptic(50)
     if (shopSettings.soundEnabled) playTapSound()
 
     set((state) => {
+      // Find item with same ID AND same spicy level
       const existingIndex = state.cart.findIndex(
-        cItem => cItem.menuItemId === item.id
+        cItem => cItem.menuItemId === item.id && cItem.spicyLevel === spicyLevel
       )
 
       if (existingIndex > -1) {
         const newCart = [...state.cart]
         newCart[existingIndex] = {
           ...newCart[existingIndex],
-          quantity: newCart[existingIndex].quantity + 1
+          quantity: newCart[existingIndex].quantity + quantity,
+          note: note ? note : newCart[existingIndex].note
         }
         return { cart: newCart }
       } else {
         const newItem: CartItem = {
-          cartItemId: `menu-${item.id}-${Date.now()}`,
+          cartItemId: `menu-${item.id}-${spicyLevel}-${Date.now()}`,
           menuItemId: item.id,
           name: item.name,
           price: item.price,
-          quantity: 1,
-          stickColorId: item.stickColorId,
-          category: item.category
+          quantity: quantity,
+          spicyLevel: spicyLevel,
+          category: item.category,
+          note: note
         }
         return { cart: [...state.cart, newItem] }
       }
     })
+  },
+
+  updateCartItemSpicy: (cartItemId, spicyLevel) => {
+    const { shopSettings } = get()
+    if (shopSettings.hapticEnabled) triggerHaptic(30)
+    set((state) => ({
+      cart: state.cart.map(item =>
+        item.cartItemId === cartItemId ? { ...item, spicyLevel } : item
+      )
+    }))
   },
 
   incrementCartItem: (cartItemId) => {

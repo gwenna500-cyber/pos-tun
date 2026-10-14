@@ -12,7 +12,7 @@ import {
 import { updateOrderStatusInDb, getTodayOrders } from '../lib/db'
 import { updateFirebaseOrderStatus, subscribeToFirebaseOrders, isFirebaseReady } from '../lib/firebase'
 import { playKitchenAlert } from '../lib/soundAndHaptic'
-import { SPICY_LEVELS, COOKING_METHODS } from '../lib/constants'
+import { SPICY_LEVELS } from '../lib/constants'
 import type { Order, OrderStatus } from '../types'
 
 export const KitchenView: React.FC = () => {
@@ -182,9 +182,6 @@ export const KitchenView: React.FC = () => {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5 pb-8">
             {filteredOrders.map((order) => {
-              const spicy = SPICY_LEVELS.find(s => s.id === order.spicyLevel)
-              const cook = COOKING_METHODS.find(m => m.id === order.cookingMethod)
-
               // Status theme
               let statusBorder = 'border-amber-300'
               let statusBadge = 'bg-amber-100 text-amber-800'
@@ -228,45 +225,49 @@ export const KitchenView: React.FC = () => {
                     </span>
                   </div>
 
-                  {/* Modifiers Badges (Prominent Cooking & Spicy badges) */}
-                  <div className="px-3.5 pt-2.5 pb-1 flex flex-wrap gap-1.5 border-b border-slate-100">
-                    {/* Cooking Method */}
-                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-extrabold bg-red-50 text-red-700 border border-red-200">
-                      <Flame className="w-3.5 h-3.5 text-red-600" />
-                      {cook?.label || order.cookingMethod}
-                    </span>
+                  {/* Order General Notes (if any) */}
+                  {order.notes && (
+                    <div className="px-3.5 py-2 bg-amber-50 text-amber-900 border-b border-amber-200 text-xs font-bold">
+                      โน้ตบิล: {order.notes}
+                    </div>
+                  )}
 
-                    {/* Spicy Level Badge */}
-                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-black border ${spicy?.badgeClass || 'bg-slate-100 text-slate-700'}`}>
-                      {spicy?.label || order.spicyLevel}
-                    </span>
-
-                    {order.notes && (
-                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold bg-amber-50 text-amber-900 border border-amber-200 w-full">
-                        โน้ต: {order.notes}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Items List (Large text for kitchen staff) */}
+                  {/* Items List (Large text with per-item spicy level for kitchen staff) */}
                   <div className="p-3.5 space-y-2 flex-1">
                     <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">
                       รายการอาหาร ({order.totalItemsCount} รายการ):
                     </div>
                     <div className="space-y-1.5">
-                      {order.items.map((item, idx) => (
-                        <div
-                          key={idx}
-                          className="flex items-center justify-between text-sm sm:text-base font-bold bg-slate-50/70 p-2 rounded-xl border border-slate-100"
-                        >
-                          <span className="text-slate-800 truncate pr-2">
-                            {item.name}
-                          </span>
-                          <span className="text-red-600 font-black text-lg bg-red-50 px-2.5 py-0.5 rounded-lg border border-red-100">
-                            ×{item.quantity}
-                          </span>
-                        </div>
-                      ))}
+                      {order.items.map((item, idx) => {
+                        const itemSpicy = item.spicyLevel ? SPICY_LEVELS.find(s => s.id === item.spicyLevel) : null
+                        return (
+                          <div
+                            key={idx}
+                            className="flex items-center justify-between text-sm sm:text-base font-bold bg-slate-50/70 p-2.5 rounded-xl border border-slate-100"
+                          >
+                            <div className="flex-1 min-w-0 pr-2">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-slate-900 font-extrabold text-sm sm:text-base">
+                                  {item.name}
+                                </span>
+                                {itemSpicy && (
+                                  <span className={`px-2 py-0.5 rounded-md text-xs font-black border ${itemSpicy.badgeClass}`}>
+                                    {itemSpicy.label.split(' ')[0]}
+                                  </span>
+                                )}
+                              </div>
+                              {item.note && (
+                                <span className="text-xs text-amber-800 font-semibold block mt-0.5">
+                                  โน้ต: {item.note}
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-red-600 font-black text-lg bg-red-50 px-2.5 py-0.5 rounded-lg border border-red-100 flex-shrink-0">
+                              ×{item.quantity}
+                            </span>
+                          </div>
+                        )
+                      })}
                     </div>
                   </div>
 

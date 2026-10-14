@@ -113,7 +113,7 @@ export const ReceiptSlip: React.FC = () => {
                 )}
                 {order.spicyLevel && (
                   <div>
-                    ความเผ็ด: <strong>{spicyOptions.find(s => s.id === order.spicyLevel)?.label.split(' ')[0] || order.spicyLevel}</strong>
+                    ความเผ็ด: <strong>{spicyOptions.find(s => s.id === order.spicyLevel)?.label || SPICY_LEVELS.find(s => s.id === order.spicyLevel)?.label || order.spicyLevel}</strong>
                   </div>
                 )}
                 {order.orderAddons && order.orderAddons.length > 0 && (
@@ -234,7 +234,7 @@ export const ReceiptSlip: React.FC = () => {
         <div style={{ fontSize: '10px', marginBottom: '6px' }}>
           <div>เวลา: {formattedDate}</div>
           {order.spicyLevel && (
-            <div>ความเผ็ด: {spicyOptions.find(s => s.id === order.spicyLevel)?.label.split(' ')[0] || order.spicyLevel}</div>
+            <div>ความเผ็ด: {spicyOptions.find(s => s.id === order.spicyLevel)?.label || SPICY_LEVELS.find(s => s.id === order.spicyLevel)?.label || order.spicyLevel}</div>
           )}
           {order.orderAddons && order.orderAddons.length > 0 && (
             <div style={{ fontWeight: 'bold' }}>* พิเศษ: {order.orderAddons.join(', ')}</div>
@@ -251,7 +251,7 @@ export const ReceiptSlip: React.FC = () => {
             return (
               <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
                 <span>
-                  {item.name} {spicy ? `[${spicy.label.split(' ')[0]}]` : ''} x{item.quantity}
+                  {item.name} {spicy ? `[${spicy.label.split(' ')[0]}]` : ''} {item.addons && item.addons.length > 0 ? `(+${item.addons.join(',')})` : ''} x{item.quantity}
                 </span>
                 <span>{item.price * item.quantity}.-</span>
               </div>

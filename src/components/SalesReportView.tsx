@@ -11,10 +11,11 @@ import {
 } from 'lucide-react'
 import { getTodayOrders } from '../lib/db'
 import { usePosStore } from '../store/usePosStore'
+import { SPICY_LEVELS } from '../lib/constants'
 import type { Order } from '../types'
 
 export const SalesReportView: React.FC = () => {
-  const { openReceiptModal } = usePosStore()
+  const { openReceiptModal, spicyOptions } = usePosStore()
   const [orders, setOrders] = useState<Order[]>([])
 
   const loadData = async () => {
@@ -268,7 +269,7 @@ export const SalesReportView: React.FC = () => {
                 <th className="py-3 px-4">คิว / โต๊ะ</th>
                 <th className="py-3 px-4">เวลา</th>
                 <th className="py-3 px-4">รายการอาหาร</th>
-                <th className="py-3 px-4">วิธีปรุง & เผ็ด</th>
+                <th className="py-3 px-4">ระดับความเผ็ด & ตัวเลือกพิเศษ</th>
                 <th className="py-3 px-4">ยอดสุทธิ</th>
                 <th className="py-3 px-4">ชำระโดย</th>
                 <th className="py-3 px-4 text-center">พิมพ์ซ้ำ</th>
@@ -291,8 +292,23 @@ export const SalesReportView: React.FC = () => {
                     </span>
                   </td>
                   <td className="py-3 px-4">
-                    <span className="font-bold text-red-600">{o.cookingMethod}</span>
-                    <span className="block text-[10px] text-slate-500">{o.spicyLevel}</span>
+                    {o.spicyLevel ? (
+                      <span className="font-bold text-red-600 block text-xs">
+                        🔥 {spicyOptions.find(s => s.id === o.spicyLevel)?.label || SPICY_LEVELS.find(s => s.id === o.spicyLevel)?.label || o.spicyLevel}
+                      </span>
+                    ) : (
+                      <span className="text-slate-400 font-medium block text-xs">-</span>
+                    )}
+                    {o.orderAddons && o.orderAddons.length > 0 && (
+                      <span className="inline-block mt-0.5 text-[10px] text-amber-800 font-semibold bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
+                        ✨ {o.orderAddons.join(', ')}
+                      </span>
+                    )}
+                    {o.notes && (
+                      <span className="block text-[10px] text-slate-500 italic truncate max-w-[150px] mt-0.5">
+                        โน้ต: {o.notes}
+                      </span>
+                    )}
                   </td>
                   <td className="py-3 px-4 font-black text-slate-900 text-sm">
                     {o.grandTotal} ฿

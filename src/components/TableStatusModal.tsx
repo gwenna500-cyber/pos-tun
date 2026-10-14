@@ -10,10 +10,12 @@ import {
   AlertCircle,
   Sparkles,
   ExternalLink,
-  Lock
+  Lock,
+  Flame
 } from 'lucide-react'
 import { usePosStore } from '../store/usePosStore'
 import { db } from '../lib/db'
+import { SPICY_LEVELS } from '../lib/constants'
 import type { Order, PaymentMethod } from '../types'
 
 export const TableStatusModal: React.FC = () => {
@@ -25,7 +27,8 @@ export const TableStatusModal: React.FC = () => {
     billTableSession, 
     clearTableSession, 
     openTableSession,
-    openReceiptModal
+    openReceiptModal,
+    spicyOptions
   } = usePosStore()
 
   const [activeTab, setActiveTab] = useState<'all' | 'occupied' | 'billed' | 'available'>('all')
@@ -301,6 +304,19 @@ export const TableStatusModal: React.FC = () => {
                           👤 {session.customerName}
                         </div>
                       )}
+                      {activeOrders.length > 0 && activeOrders[0]?.spicyLevel && (
+                        <div className="flex items-center gap-1.5 text-[11px] pt-0.5 flex-wrap">
+                          <span className="text-slate-500">ความเผ็ด:</span>
+                          <span className="px-2 py-0.5 rounded-md bg-red-100 text-red-800 font-bold border border-red-200 text-[10px]">
+                            🔥 {spicyOptions.find(s => s.id === activeOrders[0].spicyLevel)?.label.split(' ')[0] || SPICY_LEVELS.find(s => s.id === activeOrders[0].spicyLevel)?.label.split(' ')[0] || activeOrders[0].spicyLevel}
+                          </span>
+                          {activeOrders[0].orderAddons && activeOrders[0].orderAddons.length > 0 && (
+                            <span className="px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-900 font-medium border border-amber-200 text-[10px]">
+                              ✨ {activeOrders[0].orderAddons.join(', ')}
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -455,16 +471,49 @@ export const TableStatusModal: React.FC = () => {
               const totalAmount = activeOrders.reduce((sum, o) => sum + o.grandTotal, 0) || (session?.totalAmount || 0)
               
               return (
-                <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-200 text-center">
-                  <span className="text-xs font-bold text-emerald-800 block mb-0.5">
-                    ยอดรวมที่ต้องชำระทั้งหมด:
-                  </span>
-                  <div className="text-3xl font-black text-emerald-600">
-                    {totalAmount} <span className="text-sm font-bold">฿</span>
+                <div className="space-y-3">
+                  <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-200 text-center">
+                    <span className="text-xs font-bold text-emerald-800 block mb-0.5">
+                      ยอดรวมที่ต้องชำระทั้งหมด:
+                    </span>
+                    <div className="text-3xl font-black text-emerald-600">
+                      {totalAmount} <span className="text-sm font-bold">฿</span>
+                    </div>
+                    <span className="text-[11px] text-emerald-700 mt-1 block">
+                      (รวม {activeOrders.length || 1} ออเดอร์ของโต๊ะนี้)
+                    </span>
                   </div>
-                  <span className="text-[11px] text-emerald-700 mt-1 block">
-                    (รวม {activeOrders.length || 1} ออเดอร์ของโต๊ะนี้)
-                  </span>
+
+                  {activeOrders.length > 0 && (
+                    <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 max-h-36 overflow-y-auto space-y-2 text-xs">
+                      <div className="font-bold text-slate-700 text-[11px]">
+                        สรุปรายการอาหาร ({activeOrders.length} บิล):
+                      </div>
+                      {activeOrders.map(ord => {
+                        const sp = spicyOptions.find(s => s.id === ord.spicyLevel)?.label || SPICY_LEVELS.find(s => s.id === ord.spicyLevel)?.label || ord.spicyLevel
+                        return (
+                          <div key={ord.id} className="p-2 bg-white rounded-xl border border-slate-200/80 space-y-1">
+                            <div className="flex justify-between items-center font-bold text-slate-800">
+                              <span className="text-red-600">{ord.orderNumber}</span>
+                              {ord.spicyLevel && (
+                                <span className="text-[10px] font-black text-red-600 bg-red-50 px-1.5 py-0.5 rounded border border-red-200">
+                                  🔥 {sp}
+                                </span>
+                              )}
+                            </div>
+                            {ord.orderAddons && ord.orderAddons.length > 0 && (
+                              <div className="text-[10px] text-amber-800 font-semibold">
+                                ✨ {ord.orderAddons.join(', ')}
+                              </div>
+                            )}
+                            <div className="text-slate-600 text-[11px]">
+                              {ord.items.map(it => `${it.name} ×${it.quantity}`).join(', ')}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
               )
             })()}
@@ -550,8 +599,11 @@ export const TableStatusModal: React.FC = () => {
           <div className="bg-white rounded-3xl max-w-lg w-full max-h-[85vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
             <div className="px-5 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
               <div>
-                <h3 className="text-base font-black text-slate-900">
-                  รายการสั่งอาหาร {selectedTableOrders.table}
+                <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+                  <span>รายการสั่งอาหาร {selectedTableOrders.table}</span>
+                  <span className="text-xs font-black px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                    รวม {selectedTableOrders.orders.reduce((sum, o) => sum + o.grandTotal, 0)} ฿
+                  </span>
                 </h3>
                 <p className="text-xs text-slate-500">
                   รวม {selectedTableOrders.orders.length} ออเดอร์
@@ -559,7 +611,7 @@ export const TableStatusModal: React.FC = () => {
               </div>
               <button
                 onClick={() => setSelectedTableOrders(null)}
-                className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center cursor-pointer"
+                className="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center cursor-pointer transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -571,49 +623,121 @@ export const TableStatusModal: React.FC = () => {
                   ยังไม่มีประวัติออเดอร์
                 </div>
               ) : (
-                selectedTableOrders.orders.map((order) => (
-                  <div key={order.id} className="p-3 bg-slate-50 rounded-2xl border border-slate-200 text-xs space-y-1.5">
-                    <div className="flex items-center justify-between font-bold text-slate-800">
-                      <div className="flex items-center gap-1.5">
-                        <span className="px-2 py-0.5 rounded-md bg-red-600 text-white font-black text-[11px]">
-                          {order.orderNumber}
-                        </span>
-                        <span>{new Date(order.createdAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })} น.</span>
-                      </div>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-                        order.status === 'completed'
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : order.status === 'cooking'
-                            ? 'bg-blue-100 text-blue-800'
-                            : 'bg-amber-100 text-amber-800'
-                      }`}>
-                        {order.status === 'completed' ? 'เสิร์ฟแล้ว' : order.status === 'cooking' ? 'กำลังปรุง' : 'รอคิว'}
-                      </span>
-                    </div>
+                selectedTableOrders.orders.map((order) => {
+                  const spicyObj = spicyOptions.find(s => s.id === order.spicyLevel) || SPICY_LEVELS.find(s => s.id === order.spicyLevel)
+                  const spicyLabel = spicyObj?.label || order.spicyLevel
 
-                    <div className="divide-y divide-slate-200/60 pt-1">
-                      {order.items.map((item, itemIdx) => (
-                        <div key={itemIdx} className="py-1 flex justify-between text-slate-600">
-                          <span>{item.name} ×{item.quantity}</span>
-                          <span className="font-semibold text-slate-900">{item.price * item.quantity} ฿</span>
+                  return (
+                    <div key={order.id} className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 text-xs space-y-2">
+                      <div className="flex items-center justify-between font-bold text-slate-800">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="px-2 py-0.5 rounded-md bg-red-600 text-white font-black text-[11px] shadow-2xs">
+                            {order.orderNumber}
+                          </span>
+                          <span className="text-slate-600 font-semibold">
+                            {new Date(order.createdAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })} น.
+                          </span>
+                          {order.isTableQrOrder && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-800 border border-indigo-200">
+                              📱 สั่งผ่าน QR
+                            </span>
+                          )}
+                          {order.customerName && order.customerName !== order.tableOrQueue && (
+                            <span className="text-[11px] font-semibold text-indigo-900">
+                              👤 {order.customerName}
+                            </span>
+                          )}
                         </div>
-                      ))}
-                    </div>
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black ${
+                          order.status === 'completed'
+                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                            : order.status === 'cooking'
+                              ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                              : 'bg-amber-100 text-amber-800 border border-amber-200'
+                        }`}>
+                          {order.status === 'completed' ? 'เสิร์ฟแล้ว' : order.status === 'cooking' ? 'กำลังปรุง' : 'รอคิว'}
+                        </span>
+                      </div>
 
-                    <div className="border-t border-slate-200 pt-1.5 flex justify-between font-black text-slate-900">
-                      <span>ยอดบิลนี้:</span>
-                      <span className="text-emerald-600">{order.grandTotal} ฿</span>
-                    </div>
+                      {/* Spicy Level Badge */}
+                      {order.spicyLevel && (
+                        <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-red-50 to-orange-50 text-red-950 border border-red-200">
+                          <Flame className="w-3.5 h-3.5 text-red-600 flex-shrink-0" />
+                          <span className="text-[11px] font-bold text-red-800">ระดับความเผ็ด:</span>
+                          <span className="px-2 py-0.5 rounded-md bg-red-600 text-white font-black text-[11px] shadow-2xs">
+                            {spicyLabel}
+                          </span>
+                        </div>
+                      )}
 
-                    <button
-                      onClick={() => openReceiptModal(order)}
-                      className="w-full mt-1 py-1.5 rounded-lg bg-white border border-slate-300 text-slate-700 font-bold text-[11px] flex items-center justify-center gap-1 hover:bg-slate-100"
-                    >
-                      <Printer className="w-3.5 h-3.5" />
-                      <span>พิมพ์ใบเสร็จบิลนี้</span>
-                    </button>
-                  </div>
-                ))
+                      {/* Order Addons (เช่น โรยงาขาวคั่วเยอะๆ, ทอดกรอบแห้งพิเศษ) */}
+                      {order.orderAddons && order.orderAddons.length > 0 && (
+                        <div className="flex items-center gap-1.5 flex-wrap px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 text-amber-950 border border-amber-200">
+                          <span className="text-[11px] font-black text-amber-800 flex items-center gap-1">
+                            <Sparkles className="w-3 h-3 text-amber-600" />
+                            <span>ตัวเลือกพิเศษ:</span>
+                          </span>
+                          {order.orderAddons.map((addon, aIdx) => (
+                            <span key={aIdx} className="text-[11px] font-bold bg-white px-2 py-0.5 rounded-md border border-amber-300 text-amber-900 shadow-2xs">
+                              {addon.includes('งา') ? `🌾 ${addon}` : addon.includes('กรอบ') ? `🍟 ${addon}` : addon}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Order Notes */}
+                      {order.notes && (
+                        <div className="px-2.5 py-1.5 rounded-xl bg-slate-100 text-slate-700 text-[11px] border border-slate-200">
+                          <span className="font-bold text-slate-800">📝 หมายเหตุ:</span> {order.notes}
+                        </div>
+                      )}
+
+                      {/* Items List */}
+                      <div className="divide-y divide-slate-200/70 pt-1">
+                        {order.items.map((item, itemIdx) => {
+                          const itemSpicy = item.spicyLevel ? (spicyOptions.find(s => s.id === item.spicyLevel) || SPICY_LEVELS.find(s => s.id === item.spicyLevel)) : null
+                          return (
+                            <div key={itemIdx} className="py-1.5 flex justify-between items-start text-slate-600">
+                              <div className="flex-1 pr-2">
+                                <span className="text-slate-800 font-medium">{item.name}</span>
+                                <span className="font-black text-slate-900 ml-1">×{item.quantity}</span>
+                                {itemSpicy && (
+                                  <span className="inline-block text-[10px] text-red-700 font-bold bg-red-100/80 px-1.5 py-0.2 rounded border border-red-200 ml-1.5">
+                                    🔥 {itemSpicy.label}
+                                  </span>
+                                )}
+                                {item.addons && item.addons.length > 0 && (
+                                  <span className="inline-block text-[10px] text-amber-800 font-bold bg-amber-100/80 px-1.5 py-0.2 rounded border border-amber-200 ml-1.5">
+                                    +{item.addons.join(', ')}
+                                  </span>
+                                )}
+                                {item.note && (
+                                  <span className="block text-[10px] text-slate-500 italic mt-0.5">
+                                    ({item.note})
+                                  </span>
+                                )}
+                              </div>
+                              <span className="font-bold text-slate-900 flex-shrink-0">{item.price * item.quantity} ฿</span>
+                            </div>
+                          )
+                        })}
+                      </div>
+
+                      <div className="border-t border-slate-200 pt-1.5 flex justify-between font-black text-slate-900">
+                        <span>ยอดบิลนี้:</span>
+                        <span className="text-emerald-600 text-sm">{order.grandTotal} ฿</span>
+                      </div>
+
+                      <button
+                        onClick={() => openReceiptModal(order)}
+                        className="w-full mt-1 py-2 rounded-xl bg-white border border-slate-300 text-slate-700 font-bold text-[11px] flex items-center justify-center gap-1.5 hover:bg-slate-100 active:scale-[0.99] transition-all cursor-pointer shadow-2xs"
+                      >
+                        <Printer className="w-3.5 h-3.5" />
+                        <span>พิมพ์ใบเสร็จบิลนี้</span>
+                      </button>
+                    </div>
+                  )
+                })
               )}
             </div>
 

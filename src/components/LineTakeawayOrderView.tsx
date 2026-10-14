@@ -367,19 +367,66 @@ export const LineTakeawayOrderView: React.FC = () => {
           )}
 
           {/* Ordered items brief */}
-          <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 text-left text-xs space-y-1">
-            <span className="font-bold text-slate-700 block mb-1">
-              รายการที่สั่ง ({completedOrder.totalItemsCount} รายการ):
-            </span>
-            {completedOrder.items.map((item, idx) => (
-              <div key={idx} className="flex justify-between text-slate-600">
-                <span className="truncate flex-1">{item.name} x{item.quantity}</span>
-                <span className="font-semibold text-slate-900">{item.price * item.quantity} ฿</span>
+          <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 text-left text-xs space-y-2">
+            <div className="flex justify-between items-center pb-1 border-b border-slate-200/80">
+              <span className="font-bold text-slate-700">
+                รายการที่สั่ง ({completedOrder.totalItemsCount} รายการ):
+              </span>
+              <span className="text-slate-500 font-semibold text-[11px]">
+                {completedOrder.orderNumber}
+              </span>
+            </div>
+
+            {/* Spicy Level Badge */}
+            {completedOrder.spicyLevel && (
+              <div className="flex items-center justify-between px-2.5 py-1.5 rounded-xl bg-red-50 text-red-950 border border-red-200 font-bold">
+                <span className="flex items-center gap-1.5 text-[11px] text-red-800">
+                  <Flame className="w-3.5 h-3.5 text-red-600 flex-shrink-0" />
+                  <span>ระดับความเผ็ด:</span>
+                </span>
+                <span className="px-2 py-0.5 rounded-md bg-red-600 text-white font-black text-[11px] shadow-2xs">
+                  {spicyOptions.find(s => s.id === completedOrder.spicyLevel)?.label || completedOrder.spicyLevel}
+                </span>
               </div>
-            ))}
-            <div className="border-t border-slate-200 pt-1 mt-1 flex justify-between font-black text-slate-900">
+            )}
+
+            {/* Addons */}
+            {completedOrder.orderAddons && completedOrder.orderAddons.length > 0 && (
+              <div className="flex items-center justify-between px-2.5 py-1.5 rounded-xl bg-amber-50 text-amber-950 border border-amber-200 font-bold">
+                <span className="flex items-center gap-1 text-[11px] text-amber-800">
+                  <Sparkles className="w-3 h-3 text-amber-600 flex-shrink-0" />
+                  <span>ตัวเลือกพิเศษ:</span>
+                </span>
+                <div className="flex gap-1 flex-wrap justify-end">
+                  {completedOrder.orderAddons.map((addon, aIdx) => (
+                    <span key={aIdx} className="px-2 py-0.5 rounded-md bg-white border border-amber-300 text-amber-900 text-[10px] font-bold shadow-2xs">
+                      {addon.includes('งา') ? `🌾 ${addon}` : addon.includes('กรอบ') ? `🍟 ${addon}` : addon}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Order Notes */}
+            {completedOrder.notes && (
+              <div className="px-2.5 py-1.5 rounded-xl bg-slate-100 text-slate-700 text-[11px] border border-slate-200">
+                <span className="font-bold text-slate-800">📝 โน้ตเพิ่มเติม:</span> {completedOrder.notes}
+              </div>
+            )}
+
+            {/* Items */}
+            <div className="divide-y divide-slate-200/60 pt-0.5">
+              {completedOrder.items.map((item, idx) => (
+                <div key={idx} className="py-1 flex justify-between text-slate-600">
+                  <span className="truncate flex-1">{item.name} ×{item.quantity}</span>
+                  <span className="font-semibold text-slate-900">{item.price * item.quantity} ฿</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="border-t border-slate-200 pt-1.5 flex justify-between font-black text-slate-900">
               <span>ยอดรวมทั้งสิ้น:</span>
-              <span className="text-emerald-600">{completedOrder.grandTotal} ฿</span>
+              <span className="text-emerald-600 text-sm">{completedOrder.grandTotal} ฿</span>
             </div>
           </div>
 

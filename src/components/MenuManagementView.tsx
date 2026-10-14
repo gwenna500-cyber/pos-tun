@@ -25,8 +25,8 @@ const BADGE_COLOR_PRESETS = [
   { id: 'amber', name: 'ส้มอำพัน (เผ็ดน้อย)', class: 'bg-amber-100 text-amber-800 border-amber-300' },
   { id: 'slate', name: 'เทาอ่อน (ไม่เผ็ด/ผงหวาน)', class: 'bg-slate-100 text-slate-700 border-slate-300' },
   { id: 'purple', name: 'ม่วง (พริกแยก/ใส่ถ้วย)', class: 'bg-purple-100 text-purple-800 border-purple-300' },
-  { id: 'yellow', name: 'เหลือง (โรยงา/ผงชีส)', class: 'bg-yellow-100 text-yellow-800 border-yellow-300' },
-  { id: 'stone', name: 'หิน/น้ำตาล (ทอดแห้งกรอบ)', class: 'bg-stone-100 text-stone-800 border-stone-300' },
+  { id: 'yellow', name: 'เหลือง (สูตรพิเศษ/ชีส)', class: 'bg-yellow-100 text-yellow-800 border-yellow-300' },
+  { id: 'stone', name: 'หิน/น้ำตาล (พริกคั่วโบราณ)', class: 'bg-stone-100 text-stone-800 border-stone-300' },
   { id: 'emerald', name: 'เขียวมรกต (สมุนไพร/พิเศษ)', class: 'bg-emerald-100 text-emerald-800 border-emerald-300' },
   { id: 'sky', name: 'ฟ้าสดใส (ซอสสูตรลับ)', class: 'bg-sky-100 text-sky-800 border-sky-300' },
 ]
@@ -375,8 +375,8 @@ export const MenuManagementView: React.FC = () => {
                       <h3 className="font-bold text-slate-900 text-sm leading-snug line-clamp-2">
                         {item.name}
                       </h3>
-                      <div className="font-black text-slate-900 text-base flex-shrink-0 tracking-tight">
-                        {item.price} <span className="text-xs font-semibold text-slate-500">฿</span>
+                      <div className="font-black text-emerald-600 text-base flex-shrink-0 tracking-tight">
+                        {item.price} <span className="text-xs font-bold text-emerald-600">฿</span>
                       </div>
                     </div>
 

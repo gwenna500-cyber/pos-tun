@@ -9,9 +9,9 @@ export const MenuCatalog: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
   const [searchQuery, setSearchQuery] = useState<string>('')
 
-  // Active (in-stock) spicy options
+  // Active (in-stock) spicy options (genuine spice levels only)
   const activeSpicyOptions = useMemo(() => {
-    return spicyOptions.filter(s => s.isAvailable !== false)
+    return spicyOptions.filter(s => s.isAvailable !== false && s.id !== 'dry' && s.id !== 'extra_sesame')
   }, [spicyOptions])
 
   // Modal state for selecting spicy level when choosing an item
@@ -140,8 +140,8 @@ export const MenuCatalog: React.FC = () => {
                   <span className="inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
                     {getCategoryName(item.category)}
                   </span>
-                  <span className="font-black text-lg text-slate-900 tracking-tight">
-                    {item.price} <span className="text-xs font-semibold text-slate-500">฿</span>
+                  <span className="font-black text-lg text-emerald-600 tracking-tight">
+                    {item.price} <span className="text-xs font-bold text-emerald-600">฿</span>
                   </span>
                 </div>
 
@@ -193,40 +193,49 @@ export const MenuCatalog: React.FC = () => {
         </div>
       )}
 
-      {/* Spicy Level Selection Modal (Opens right after tapping a menu item) */}
+      {/* Spicy Level & Addons Selection Modal (Mobile Bottom Sheet / Desktop Centered Card) */}
       {activeItem && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-fade-in">
-          <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-end sm:items-center justify-center sm:p-4 animate-fade-in">
+          {/* Backdrop click to dismiss */}
+          <div className="fixed inset-0" onClick={() => setActiveItem(null)} />
+
+          <div className="relative z-10 bg-white w-full rounded-t-3xl sm:rounded-3xl sm:max-w-md shadow-2xl border border-slate-200 flex flex-col max-h-[90vh] sm:max-h-[92vh] overflow-hidden">
+            {/* Mobile Drag Handle */}
+            <div className="sm:hidden pt-2.5 pb-1 flex justify-center bg-slate-50">
+              <div className="w-12 h-1.5 bg-slate-300 rounded-full" />
+            </div>
+
             {/* Modal Header */}
-            <div className="p-4 bg-slate-50 border-b border-slate-200/80 flex items-center justify-between">
+            <div className="px-4 py-3 sm:p-4 bg-slate-50 border-b border-slate-200/80 flex items-center justify-between">
               <div>
                 <span className="text-[11px] font-bold uppercase tracking-wider text-red-600">
-                  เลือกระดับความเผ็ดชา
+                  เลือกระดับความเผ็ด & ตัวเลือก
                 </span>
                 <h3 className="text-lg font-black text-slate-900 leading-tight">
                   {activeItem.name}
                 </h3>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-xl font-black text-slate-900 tracking-tight">
-                  {activeItem.price * itemQty} <span className="text-sm font-semibold text-slate-500">฿</span>
+                <span className="text-xl font-black text-emerald-600 tracking-tight">
+                  {activeItem.price * itemQty} <span className="text-sm font-bold text-emerald-600">฿</span>
                 </span>
                 <button
+                  type="button"
                   onClick={() => setActiveItem(null)}
-                  className="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center transition-colors"
+                  className="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center transition-colors cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
             </div>
 
-            {/* Modal Body */}
-            <div className="p-4 overflow-y-auto space-y-4">
-              {/* Spicy Level Options Grid */}
+            {/* Modal Scrollable Body */}
+            <div className="p-4 overflow-y-auto space-y-4 flex-1">
+              {/* Spicy Level & Flavor Options Grid (Single Choice) */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-2 flex items-center gap-1.5">
+                <label className="block text-xs font-bold text-slate-800 mb-2 flex items-center gap-1.5">
                   <Flame className="w-4 h-4 text-red-600" />
-                  <span>ระดับความเผ็ดชาสำหรับเมนูนี้:</span>
+                  <span>เลือกระดับความเผ็ด / รสชาติ:</span>
                 </label>
                 <div className="grid grid-cols-2 gap-2">
                   {activeSpicyOptions.map((spicy) => {
@@ -261,14 +270,14 @@ export const MenuCatalog: React.FC = () => {
                 </div>
               </div>
 
-              {/* Quantity Selector */}
+              {/* Section 3: Quantity Selector */}
               <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 border border-slate-200">
                 <span className="text-xs font-bold text-slate-700">จำนวนที่ต้องการ:</span>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => setItemQty(Math.max(1, itemQty - 1))}
-                    className="w-9 h-9 rounded-xl bg-white border border-slate-300 flex items-center justify-center text-slate-700 font-bold active:scale-95"
+                    className="w-9 h-9 rounded-xl bg-white border border-slate-300 flex items-center justify-center text-slate-700 font-bold active:scale-95 cursor-pointer"
                   >
                     <Minus className="w-4 h-4" />
                   </button>
@@ -278,14 +287,14 @@ export const MenuCatalog: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setItemQty(itemQty + 1)}
-                    className="w-9 h-9 rounded-xl bg-white border border-slate-300 flex items-center justify-center text-slate-700 font-bold active:scale-95"
+                    className="w-9 h-9 rounded-xl bg-white border border-slate-300 flex items-center justify-center text-slate-700 font-bold active:scale-95 cursor-pointer"
                   >
                     <Plus className="w-4 h-4" />
                   </button>
                 </div>
               </div>
 
-              {/* Special Note (Optional) */}
+              {/* Section 4: Special Note (Optional) */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
                   หมายเหตุเพิ่มเติม (ถ้ามี):
@@ -294,25 +303,25 @@ export const MenuCatalog: React.FC = () => {
                   type="text"
                   value={itemNote}
                   onChange={(e) => setItemNote(e.target.value)}
-                  placeholder="เช่น ทอดกรอบแห้งๆ, ไม่ใส่กระเทียม"
+                  placeholder="เช่น ไม่ใส่กระเทียม, แยกน้ำมัน"
                   className="w-full h-10 px-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-red-500"
                 />
               </div>
             </div>
 
-            {/* Modal Footer / Add to Cart */}
-            <div className="p-3.5 bg-slate-50 border-t border-slate-200 flex gap-2">
+            {/* Sticky Bottom Footer: Always visible on Mobile & iPad */}
+            <div className="sticky bottom-0 bg-white/95 backdrop-blur-xs p-3.5 border-t border-slate-200 flex gap-2 shadow-lg z-10">
               <button
                 type="button"
                 onClick={() => setActiveItem(null)}
-                className="py-3 px-4 rounded-xl border border-slate-300 bg-white text-slate-700 font-bold text-sm hover:bg-slate-100"
+                className="py-3 px-4 rounded-xl border border-slate-300 bg-white text-slate-700 font-bold text-sm hover:bg-slate-100 cursor-pointer"
               >
                 ยกเลิก
               </button>
               <button
                 type="button"
                 onClick={handleConfirmAdd}
-                className="flex-1 py-3 px-4 rounded-xl bg-red-600 hover:bg-red-700 active:scale-[0.99] text-white font-black text-base shadow-md shadow-red-200 flex items-center justify-center gap-2"
+                className="flex-1 py-3 px-4 rounded-xl bg-red-600 hover:bg-red-700 active:scale-[0.99] text-white font-black text-base shadow-md shadow-red-200 flex items-center justify-center gap-2 cursor-pointer"
               >
                 <Plus className="w-5 h-5" />
                 <span>เพิ่มลงตะกร้า ({activeItem.price * itemQty} ฿)</span>

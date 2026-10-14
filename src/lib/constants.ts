@@ -1,4 +1,4 @@
-import type { MenuItem, SpicyOption, MenuCategory, CookingMethod, DiningType, ShopSettings } from '../types'
+import type { MenuItem, SpicyOption, MenuCategory, CookingMethod, DiningType, ShopSettings, LineOaSettings } from '../types'
 
 export const DEFAULT_MENU_CATEGORIES: MenuCategory[] = [
   { id: 'all', name: 'ทั้งหมด' },
@@ -51,9 +51,12 @@ export const DEFAULT_SPICY_OPTIONS: SpicyOption[] = [
   { id: 'mild', label: 'เผ็ดน้อย', desc: 'โรยผงหม่าล่าเบาๆ ทานง่าย สบายลิ้น', badgeClass: 'bg-amber-100 text-amber-800 border-amber-300', isAvailable: true },
   { id: 'medium', label: 'เผ็ดกลาง (สูตรเด็ด)', desc: 'รสชาติยอดฮิต หอมเครื่องเทศ ชากำลังดี', badgeClass: 'bg-orange-100 text-orange-800 border-orange-400', isAvailable: true },
   { id: 'numbing', label: 'เผ็ดชา (ลิ้นชาคูณสอง)', desc: 'พริกหม่าล่าสูตรพิเศษ ชาถึงใจสะใจสายหม่าล่า', badgeClass: 'bg-red-600 text-white border-red-700 shadow-sm', isAvailable: true },
-  { id: 'separate', label: 'ผงพริกแยก (ใส่ถ้วย)', desc: 'แยกผงหม่าล่าใส่ถ้วยไปจิ้มเอง', badgeClass: 'bg-purple-100 text-purple-800 border-purple-300', isAvailable: true },
-  { id: 'dry', label: 'ทอดกรอบแห้งพิเศษ', desc: 'ทอดสะเด็ดน้ำมันแห้งสนิท กรอบนาน', badgeClass: 'bg-stone-100 text-stone-800 border-stone-300', isAvailable: true },
-  { id: 'extra_sesame', label: 'โรยงาขาวคั่วเยอะๆ', desc: 'หอมกลิ่นงาคั่วพิเศษ', badgeClass: 'bg-yellow-100 text-yellow-800 border-yellow-300', isAvailable: true }
+  { id: 'separate', label: 'ผงพริกแยก (ใส่ถ้วย)', desc: 'แยกผงหม่าล่าใส่ถ้วยไปจิ้มเอง', badgeClass: 'bg-purple-100 text-purple-800 border-purple-300', isAvailable: true }
+]
+
+export const DEFAULT_ORDER_ADDONS = [
+  { id: 'extra_sesame', label: 'โรยงาขาวคั่วเยอะๆ', desc: 'หอมกลิ่นงาคั่วพิเศษ' },
+  { id: 'dry_crispy', label: 'ทอดกรอบแห้งพิเศษ', desc: 'ทอดสะเด็ดน้ำมันแห้งสนิท กรอบนาน' }
 ]
 
 export const SPICY_LEVELS = DEFAULT_SPICY_OPTIONS
@@ -69,7 +72,22 @@ export const DINING_TYPES: { id: DiningType; label: string }[] = [
   { id: 'dine_in', label: 'ทานที่ร้าน' }
 ]
 
+export const DEFAULT_LINE_OA_SETTINGS: LineOaSettings = {
+  enabled: true,
+  lineOaId: '@tunfinver',
+  lineOaUrl: 'https://line.me/R/ti/p/@tunfinver',
+  customOrderBaseUrl: '',
+  webhookUrl: '',
+  notifyToken: '',
+  autoNotifyOnOrder: true,
+  notifySound: true,
+  pickupIntervalMinutes: 15,
+  customWelcomeNote: 'ยินดีต้อนรับสู่ ร้านหม่าล่าทอด ตุ่นฟินเว่อร์! สั่งล่วงหน้าได้เลย รับของไม่ต้องรอคิว'
+}
+
 export const DEFAULT_SHOP_SETTINGS: ShopSettings = {
+  brandTitle: 'POS ตุ่น',
+  shopTagline: 'หม่าล่าทอดกรอบ',
   shopName: 'ร้านหม่าล่าทอด ตุ่นฟินเว่อร์',
   branchName: 'สาขา 1 (หน้าร้านหลัก)',
   promptpayPhone: '0812345678',
@@ -80,6 +98,10 @@ export const DEFAULT_SHOP_SETTINGS: ShopSettings = {
   soundEnabled: true,
   hapticEnabled: true,
   autoPrintReceipt: false,
+  tableOrderingEnabled: true,
+  tableCount: 10,
+  tableList: Array.from({ length: 10 }, (_, i) => `โต๊ะ ${i + 1}`),
+  lineOaSettings: DEFAULT_LINE_OA_SETTINGS,
   firebaseEnabled: true,
   firebaseConfig: {
     apiKey: 'AIzaSyCtfZirIM0pIclQW9l9FuWQw_8CA3aYZRs',

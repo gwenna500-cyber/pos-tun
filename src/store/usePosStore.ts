@@ -11,7 +11,8 @@ import type {
   CookingMethod, 
   DiningType, 
   PaymentMethod, 
-  StickColorId 
+  StickColorId,
+  TableSession
 } from '../types'
 import { 
   STICK_COLORS, 
@@ -31,18 +32,25 @@ import {
   resetMenuToDefaultsInDb,
   getSpicyOptionsFromDb,
   saveSpicyOptionsToDb,
-  resetSpicyToDefaultsInDb
+  resetSpicyToDefaultsInDb,
+  getTableSessionsFromDb,
+  saveTableSessionsToDb,
+  updateOrderStatusInDb
 } from '../lib/db'
 import { 
   pushOrderToFirebase, 
   isFirebaseReady,
   syncMenuItemsToFirebase,
-  syncSpicyOptionsToFirebase
+  syncSpicyOptionsToFirebase,
+  updateFirebaseTableSession,
+  subscribeToFirebaseTableSessions,
+  updateFirebaseOrderStatus
 } from '../lib/firebase'
 import { triggerHaptic, playTapSound, playSuccessChime } from '../lib/soundAndHaptic'
 import { bluetoothPrinter } from '../lib/bluetoothPrinter'
+import { sendLineOrderWebhook } from '../lib/lineNotify'
 
-export type PosView = 'pos' | 'kitchen' | 'sales' | 'menu' | 'settings'
+export type PosView = 'pos' | 'kitchen' | 'sales' | 'menu' | 'settings' | 'online-order'
 
 interface PosState {
   // Navigation & UI
@@ -59,10 +67,11 @@ interface PosState {
   customerQueue: string
   orderNotes: string
   discount: number
+  orderAddons: string[]
 
   // Actions for Cart
   addStickByColor: (colorId: StickColorId) => void
-  addMenuItem: (item: MenuItem, spicyLevel?: SpicyLevel, note?: string, quantity?: number) => void
+  addMenuItem: (item: MenuItem, spicyLevel?: SpicyLevel, note?: string, quantity?: number, addons?: string[]) => void
   updateCartItemSpicy: (cartItemId: string, spicyLevel: SpicyLevel) => void
   incrementCartItem: (cartItemId: string) => void
   decrementCartItem: (cartItemId: string) => void
@@ -76,6 +85,8 @@ interface PosState {
   setCustomerQueue: (queue: string) => void
   setOrderNotes: (notes: string) => void
   setDiscount: (amount: number) => void
+  setOrderAddons: (addons: string[]) => void
+  toggleOrderAddon: (addon: string) => void
 
   // Menu items list & Spicy options
   menuItems: MenuItem[]
@@ -112,12 +123,49 @@ interface PosState {
   pendingSyncCount: number
   refreshSyncCount: () => Promise<void>
 
+  // Table Management & Table Sessions
+  tableSessions: Record<string, TableSession>
+  isTableStatusModalOpen: boolean
+  openTableStatusModal: () => void
+  closeTableStatusModal: () => void
+  billTableSession: (tableNumber: string, paymentMethod?: PaymentMethod) => Promise<void>
+  clearTableSession: (tableNumber: string) => Promise<void>
+  openTableSession: (tableNumber: string) => Promise<string>
+  loadTableSessions: () => Promise<void>
+
   // Checkout process
   finalizeCheckout: (paymentMethod: PaymentMethod, cashReceived?: number) => Promise<Order | null>
+  submitCustomerOrder: (orderData: {
+    diningType: DiningType
+    tableNumber?: string
+    customerName?: string
+    customerPhone?: string
+    pickupTime?: string
+    notes?: string
+    orderAddons?: string[]
+    items: CartItem[]
+    paymentMethod: PaymentMethod
+    paymentStatus?: 'paid' | 'pending'
+  }) => Promise<Order>
+  submitOnlineTakeawayOrder: (orderData: {
+    customerName: string
+    customerPhone: string
+    pickupTime: string
+    notes?: string
+    orderAddons?: string[]
+    items: CartItem[]
+    paymentMethod: PaymentMethod
+  }) => Promise<Order>
 }
 
+const isOnlineOrderInitial = typeof window !== 'undefined' && 
+  (window.location.search.includes('order') || 
+   window.location.hash.includes('order') ||
+   window.location.search.includes('table') || 
+   window.location.hash.includes('table'))
+
 export const usePosStore = create<PosState>((set, get) => ({
-  currentView: 'pos',
+  currentView: isOnlineOrderInitial ? 'online-order' : 'pos',
   setCurrentView: (view) => set({ currentView: view }),
   isMobileCartOpen: false,
   toggleMobileCart: (open) => set((state) => ({ 
@@ -131,6 +179,7 @@ export const usePosStore = create<PosState>((set, get) => ({
   customerQueue: '',
   orderNotes: '',
   discount: 0,
+  orderAddons: [],
 
   menuItems: DEFAULT_MENU_ITEMS,
   spicyOptions: DEFAULT_SPICY_OPTIONS,
@@ -140,7 +189,24 @@ export const usePosStore = create<PosState>((set, get) => ({
     try {
       const items = await getAllMenuItemsFromDb()
       const spicy = await getSpicyOptionsFromDb()
-      set({ menuItems: items, spicyOptions: spicy })
+      const settingsRecord = await db.settings.get('shopSettings')
+      if (settingsRecord && settingsRecord.value) {
+        set({ 
+          menuItems: items, 
+          spicyOptions: spicy,
+          shopSettings: {
+            ...DEFAULT_SHOP_SETTINGS,
+            ...settingsRecord.value,
+            lineOaSettings: {
+              ...DEFAULT_SHOP_SETTINGS.lineOaSettings,
+              ...(settingsRecord.value.lineOaSettings || {})
+            }
+          }
+        })
+      } else {
+        set({ menuItems: items, spicyOptions: spicy })
+      }
+      get().loadTableSessions()
     } catch (err) {
       console.error('Failed to load menu & spicy:', err)
     }
@@ -272,35 +338,42 @@ export const usePosStore = create<PosState>((set, get) => ({
     })
   },
 
-  addMenuItem: (item, spicyLevel = 'medium', note = '', quantity = 1) => {
+  addMenuItem: (item, spicyLevel = 'medium', note = '', quantity = 1, addons = []) => {
     const { shopSettings } = get()
     if (shopSettings.hapticEnabled) triggerHaptic(50)
     if (shopSettings.soundEnabled) playTapSound()
 
+    const sortedAddons = [...addons].sort()
+    const addonsKey = JSON.stringify(sortedAddons)
+
     set((state) => {
-      // Find item with same ID AND same spicy level
+      // Find item with same ID, same spicy level, same addons, and same note
       const existingIndex = state.cart.findIndex(
-        cItem => cItem.menuItemId === item.id && cItem.spicyLevel === spicyLevel
+        cItem => 
+          cItem.menuItemId === item.id && 
+          cItem.spicyLevel === spicyLevel &&
+          JSON.stringify([...(cItem.addons || [])].sort()) === addonsKey &&
+          (cItem.note || '') === (note || '')
       )
 
       if (existingIndex > -1) {
         const newCart = [...state.cart]
         newCart[existingIndex] = {
           ...newCart[existingIndex],
-          quantity: newCart[existingIndex].quantity + quantity,
-          note: note ? note : newCart[existingIndex].note
+          quantity: newCart[existingIndex].quantity + quantity
         }
         return { cart: newCart }
       } else {
         const newItem: CartItem = {
-          cartItemId: `menu-${item.id}-${spicyLevel}-${Date.now()}`,
+          cartItemId: `menu-${item.id}-${spicyLevel}-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
           menuItemId: item.id,
           name: item.name,
           price: item.price,
           quantity: quantity,
           spicyLevel: spicyLevel,
           category: item.category,
-          note: note
+          note: note,
+          addons: sortedAddons
         }
         return { cart: [...state.cart, newItem] }
       }
@@ -390,6 +463,153 @@ export const usePosStore = create<PosState>((set, get) => ({
   setCustomerQueue: (customerQueue) => set({ customerQueue }),
   setOrderNotes: (orderNotes) => set({ orderNotes }),
   setDiscount: (discount) => set({ discount }),
+  setOrderAddons: (orderAddons) => set({ orderAddons }),
+  toggleOrderAddon: (addon) => set((state) => {
+    const exists = state.orderAddons.includes(addon)
+    const updated = exists
+      ? state.orderAddons.filter(a => a !== addon)
+      : [...state.orderAddons, addon]
+    return { orderAddons: updated }
+  }),
+
+  // Table status modal & table sessions
+  tableSessions: {},
+  isTableStatusModalOpen: false,
+  openTableStatusModal: () => set({ isTableStatusModalOpen: true }),
+  closeTableStatusModal: () => set({ isTableStatusModalOpen: false }),
+
+  billTableSession: async (tableNumber: string, paymentMethod: PaymentMethod = 'cash') => {
+    const { tableSessions, shopSettings } = get()
+    const cleanTable = tableNumber.startsWith('โต๊ะ') ? tableNumber : `โต๊ะ ${tableNumber}`
+    const existing = tableSessions[cleanTable]
+
+    // 1. Mark all pending/cooking/ready orders of this table as completed & paid
+    try {
+      const allOrders = await db.orders.toArray()
+      const tableOrders = allOrders.filter(
+        o => (o.tableNumber === cleanTable || o.tableOrQueue === cleanTable) && 
+             o.status !== 'completed' && 
+             o.status !== 'cancelled'
+      )
+
+      for (const order of tableOrders) {
+        await updateOrderStatusInDb(order.id, 'completed')
+        await db.orders.update(order.id, { 
+          paymentStatus: 'paid', 
+          paymentMethod,
+          completedAt: Date.now() 
+        })
+        if (isFirebaseReady()) {
+          updateFirebaseOrderStatus(order.id, 'completed').catch(console.error)
+        }
+      }
+    } catch (err) {
+      console.warn('Error marking table orders completed:', err)
+    }
+
+    // 2. Mark table session as billed
+    const updatedSession: TableSession = {
+      tableNumber: cleanTable,
+      sessionId: existing?.sessionId || `sess_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      status: 'billed',
+      openedAt: existing?.openedAt || Date.now(),
+      billedAt: Date.now(),
+      totalAmount: existing?.totalAmount || 0,
+      orderCount: existing?.orderCount || 0,
+      customerName: existing?.customerName,
+      paymentMethod
+    }
+
+    const newSessions = { ...get().tableSessions, [cleanTable]: updatedSession }
+    set({ tableSessions: newSessions })
+
+    await saveTableSessionsToDb(newSessions)
+    if (isFirebaseReady()) {
+      await updateFirebaseTableSession(updatedSession)
+    }
+
+    // Broadcast update across local browser tabs
+    try {
+      localStorage.setItem('pos_broadcast_table_sessions', JSON.stringify({ timestamp: Date.now(), sessions: newSessions }))
+    } catch {}
+
+    if (shopSettings.soundEnabled) playSuccessChime()
+    if (shopSettings.hapticEnabled) triggerHaptic([50, 50, 100])
+  },
+
+  clearTableSession: async (tableNumber: string) => {
+    const cleanTable = tableNumber.startsWith('โต๊ะ') ? tableNumber : `โต๊ะ ${tableNumber}`
+    const newSessionId = `sess_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
+
+    const updatedSession: TableSession = {
+      tableNumber: cleanTable,
+      sessionId: newSessionId,
+      status: 'available',
+      openedAt: Date.now(),
+      totalAmount: 0,
+      orderCount: 0
+    }
+
+    const newSessions = { ...get().tableSessions, [cleanTable]: updatedSession }
+    set({ tableSessions: newSessions })
+
+    await saveTableSessionsToDb(newSessions)
+    if (isFirebaseReady()) {
+      await updateFirebaseTableSession(updatedSession)
+    }
+
+    try {
+      localStorage.setItem('pos_broadcast_table_sessions', JSON.stringify({ timestamp: Date.now(), sessions: newSessions }))
+    } catch {}
+  },
+
+  openTableSession: async (tableNumber: string) => {
+    const cleanTable = tableNumber.startsWith('โต๊ะ') ? tableNumber : `โต๊ะ ${tableNumber}`
+    const newSessionId = `sess_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
+
+    const updatedSession: TableSession = {
+      tableNumber: cleanTable,
+      sessionId: newSessionId,
+      status: 'occupied',
+      openedAt: Date.now(),
+      totalAmount: 0,
+      orderCount: 0
+    }
+
+    const newSessions = { ...get().tableSessions, [cleanTable]: updatedSession }
+    set({ tableSessions: newSessions })
+
+    await saveTableSessionsToDb(newSessions)
+    if (isFirebaseReady()) {
+      await updateFirebaseTableSession(updatedSession)
+    }
+
+    try {
+      localStorage.setItem('pos_broadcast_table_sessions', JSON.stringify({ timestamp: Date.now(), sessions: newSessions }))
+    } catch {}
+
+    return newSessionId
+  },
+
+  loadTableSessions: async () => {
+    try {
+      const local = await getTableSessionsFromDb()
+      if (local && Object.keys(local).length > 0) {
+        set({ tableSessions: local })
+      }
+    } catch (err) {
+      console.warn('Error loading local table sessions:', err)
+    }
+
+    if (isFirebaseReady()) {
+      subscribeToFirebaseTableSessions((cloudSessions) => {
+        if (cloudSessions && Object.keys(cloudSessions).length > 0) {
+          set(state => ({ tableSessions: { ...state.tableSessions, ...cloudSessions } }))
+          saveTableSessionsToDb(cloudSessions).catch(console.error)
+        }
+      })
+    }
+  },
 
   // Checkout modal
   isPaymentModalOpen: false,
@@ -440,7 +660,8 @@ export const usePosStore = create<PosState>((set, get) => ({
       customerQueue, 
       orderNotes, 
       discount, 
-      shopSettings 
+      shopSettings,
+      orderAddons
     } = state
 
     if (cart.length === 0) return null
@@ -473,6 +694,7 @@ export const usePosStore = create<PosState>((set, get) => ({
       cookingMethod,
       diningType,
       notes: orderNotes.trim(),
+      orderAddons: orderAddons.length > 0 ? [...orderAddons] : undefined,
       paymentMethod,
       paymentStatus: 'paid',
       cashReceived,
@@ -514,6 +736,7 @@ export const usePosStore = create<PosState>((set, get) => ({
         cart: [],
         customerQueue: '',
         orderNotes: '',
+        orderAddons: [],
         discount: 0,
         isPaymentModalOpen: false,
         isMobileCartOpen: false,
@@ -529,5 +752,127 @@ export const usePosStore = create<PosState>((set, get) => ({
       console.error('Error finalizing checkout:', err)
       return null
     }
+  },
+
+  submitCustomerOrder: async (orderData) => {
+    const { shopSettings } = get()
+    const orderNumber = await getNextQueueNumber()
+    const subtotal = orderData.items.reduce((s, i) => s + i.price * i.quantity, 0)
+    const grandTotal = subtotal
+    const totalItemsCount = orderData.items.reduce((s, i) => s + i.quantity, 0)
+    const isTable = orderData.diningType === 'dine_in'
+    const tableLabel = orderData.tableNumber || 'โต๊ะ 1'
+
+    // 1. Table Lockout Validation: If table was billed, refuse further orders!
+    if (isTable) {
+      const currentSession = get().tableSessions[tableLabel]
+      if (currentSession && currentSession.status === 'billed') {
+        throw new Error(`โต๊ะ ${tableLabel} เช็คบิลเรียบร้อยแล้ว ไม่สามารถส่งออเดอร์เพิ่มได้ กรุณาติดต่อพนักงานครับ`)
+      }
+    }
+
+    // 2. Manage table session ID
+    let tableSessionId: string | undefined = undefined
+    if (isTable) {
+      const currentSession = get().tableSessions[tableLabel]
+      if (currentSession?.sessionId && currentSession.status === 'occupied') {
+        tableSessionId = currentSession.sessionId
+      } else {
+        tableSessionId = `sess_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
+      }
+    }
+
+    const newOrder: Order = {
+      id: `${isTable ? 'table' : 'online'}-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      orderNumber,
+      tableOrQueue: isTable ? tableLabel : `LINE: ${orderData.customerName || 'กลับบ้าน'}`,
+      items: orderData.items,
+      totalItemsCount,
+      subtotal,
+      discount: 0,
+      grandTotal,
+      diningType: orderData.diningType,
+      notes: orderData.notes || '',
+      orderAddons: orderData.orderAddons && orderData.orderAddons.length > 0 ? orderData.orderAddons : undefined,
+      paymentMethod: orderData.paymentMethod,
+      paymentStatus: orderData.paymentStatus || 'pending',
+      status: 'pending',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      syncStatus: 'pending_sync',
+      isLineOrder: !isTable,
+      isTableQrOrder: isTable,
+      tableNumber: isTable ? tableLabel : undefined,
+      tableSessionId,
+      customerName: orderData.customerName,
+      customerPhone: orderData.customerPhone,
+      pickupTime: orderData.pickupTime
+    }
+
+    // 3. Save locally in IndexedDB
+    await saveOrderToDb(newOrder)
+
+    // 4. Update table session state (set to occupied, increment counts)
+    if (isTable && tableSessionId) {
+      const prev = get().tableSessions[tableLabel]
+      const updatedSession: TableSession = {
+        tableNumber: tableLabel,
+        sessionId: tableSessionId,
+        status: 'occupied',
+        openedAt: prev?.status === 'occupied' ? prev.openedAt : Date.now(),
+        orderCount: (prev?.status === 'occupied' ? (prev.orderCount || 0) : 0) + 1,
+        totalAmount: (prev?.status === 'occupied' ? (prev.totalAmount || 0) : 0) + grandTotal,
+        lastOrderAt: Date.now(),
+        customerName: orderData.customerName || prev?.customerName
+      }
+      const nextSessions = { ...get().tableSessions, [tableLabel]: updatedSession }
+      set({ tableSessions: nextSessions })
+      saveTableSessionsToDb(nextSessions).catch(console.error)
+      if (isFirebaseReady()) {
+        updateFirebaseTableSession(updatedSession).catch(console.error)
+      }
+      try {
+        localStorage.setItem('pos_broadcast_table_sessions', JSON.stringify({ timestamp: Date.now(), sessions: nextSessions }))
+      } catch {}
+    }
+
+    // 5. Real-time broadcast via Firebase so cashiers and kitchen get notified immediately
+    if (isFirebaseReady()) {
+      pushOrderToFirebase(newOrder).catch(console.error)
+    }
+
+    // 6. Trigger Webhook / LINE Notification if configured
+    if (shopSettings.lineOaSettings?.autoNotifyOnOrder) {
+      sendLineOrderWebhook(newOrder, shopSettings.lineOaSettings, shopSettings.shopName).catch(console.error)
+    }
+
+    // 7. Play audio and haptic feedback
+    if (shopSettings.soundEnabled) playSuccessChime()
+    if (shopSettings.hapticEnabled) triggerHaptic([50, 100, 150])
+
+    get().refreshSyncCount()
+    return newOrder
+  },
+
+  submitOnlineTakeawayOrder: async (orderData) => {
+    return get().submitCustomerOrder({
+      ...orderData,
+      diningType: 'takeaway'
+    })
   }
 }))
+
+// Instant cross-tab local synchronization for Table Sessions
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (e) => {
+    if (e.key === 'pos_broadcast_table_sessions' && e.newValue) {
+      try {
+        const parsed = JSON.parse(e.newValue)
+        if (parsed && parsed.sessions) {
+          usePosStore.setState({ tableSessions: parsed.sessions })
+        }
+      } catch {}
+    }
+  })
+}
+

@@ -100,6 +100,22 @@ export const ReceiptSlip: React.FC = () => {
               {/* Order Info */}
               <div className="text-[10px] text-slate-500 space-y-0.5 pb-2 border-b border-dashed border-slate-300">
                 <div>เวลา: {formattedDate}</div>
+                {order.isLineOrder && (
+                  <div className="text-emerald-700 font-bold">
+                    [LINE สั่งกลับบ้าน] คุณ {order.customerName} {order.customerPhone ? `(${order.customerPhone})` : ''}
+                    {order.pickupTime && <div className="text-slate-800">นัดรับ: {order.pickupTime}</div>}
+                  </div>
+                )}
+                {order.isTableQrOrder && (
+                  <div className="text-indigo-700 font-bold">
+                    [สั่งผ่าน QR โต๊ะ] {order.tableOrQueue} {order.customerName && order.customerName !== order.tableOrQueue ? `(คุณ ${order.customerName})` : ''}
+                  </div>
+                )}
+                {order.orderAddons && order.orderAddons.length > 0 && (
+                  <div className="text-amber-800 font-bold bg-amber-50 p-1 rounded border border-amber-200">
+                    พิเศษ: {order.orderAddons.join(', ')}
+                  </div>
+                )}
                 {order.notes && <div>โน้ต: <strong>{order.notes}</strong></div>}
               </div>
 
@@ -112,6 +128,9 @@ export const ReceiptSlip: React.FC = () => {
                       <div className="flex-1 pr-1 truncate">
                         <span>{item.name}</span>
                         {spicy && <span className="text-red-600 font-bold ml-1">[{spicy.label.split(' ')[0]}]</span>}
+                        {item.addons && item.addons.length > 0 && (
+                          <span className="text-amber-700 font-semibold ml-1">+{item.addons.join(', ')}</span>
+                        )}
                         {item.note && <span className="text-slate-400 block text-[9px]">({item.note})</span>}
                         <span className="text-slate-500 ml-1">×{item.quantity}</span>
                       </div>
@@ -209,6 +228,9 @@ export const ReceiptSlip: React.FC = () => {
 
         <div style={{ fontSize: '10px', marginBottom: '6px' }}>
           <div>เวลา: {formattedDate}</div>
+          {order.orderAddons && order.orderAddons.length > 0 && (
+            <div style={{ fontWeight: 'bold' }}>* พิเศษ: {order.orderAddons.join(', ')}</div>
+          )}
           {order.notes && <div>หมายเหตุ: {order.notes}</div>}
         </div>
 

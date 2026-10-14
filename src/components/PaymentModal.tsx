@@ -6,7 +6,8 @@ import {
   CheckCircle2, 
   Copy, 
   Check, 
-  Tag
+  Tag,
+  Sparkles
 } from 'lucide-react'
 import { usePosStore } from '../store/usePosStore'
 import { generatePromptPayQrDataUrl } from '../lib/promptpay'
@@ -20,7 +21,9 @@ export const PaymentModal: React.FC = () => {
     discount, 
     setDiscount, 
     shopSettings, 
-    finalizeCheckout 
+    finalizeCheckout,
+    orderAddons,
+    toggleOrderAddon
   } = usePosStore()
 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('promptpay')
@@ -78,8 +81,12 @@ export const PaymentModal: React.FC = () => {
   }
 
   return (
-    <div className="no-print fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-fade-in">
-      <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[95vh]">
+    <div className="no-print fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-end sm:items-center justify-center sm:p-4 animate-fade-in">
+      <div className="bg-white rounded-t-3xl sm:rounded-3xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[95vh]">
+        {/* Mobile drag handle */}
+        <div className="sm:hidden pt-2.5 pb-1 flex justify-center bg-slate-50">
+          <div className="w-12 h-1.5 bg-slate-300 rounded-full" />
+        </div>
         {/* Modal Header */}
         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
           <div>
@@ -232,6 +239,43 @@ export const PaymentModal: React.FC = () => {
             </div>
           )}
 
+          {/* Order Addons (ตัวเลือกพิเศษตอนกำลังจะคิดตังค์) */}
+          <div className="bg-amber-50/80 p-3 rounded-2xl border border-amber-200">
+            <div className="text-xs font-bold text-amber-950 mb-1.5 flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                <span>ตัวเลือกพิเศษของบิลนี้:</span>
+              </span>
+              <span className="text-[10px] text-amber-700 font-semibold">เลือกได้หลายอย่าง</span>
+            </div>
+            <div className="grid grid-cols-2 gap-1.5">
+              <button
+                type="button"
+                onClick={() => toggleOrderAddon('โรยงาขาวคั่วเยอะๆ')}
+                className={`p-2 rounded-xl border text-left text-xs font-bold flex items-center justify-between cursor-pointer transition-all ${
+                  orderAddons.includes('โรยงาขาวคั่วเยอะๆ')
+                    ? 'bg-amber-500 text-white border-amber-500 shadow-xs ring-2 ring-amber-300'
+                    : 'bg-white border-amber-200 text-slate-700 hover:bg-amber-50'
+                }`}
+              >
+                <span>🌾 โรยงาขาวคั่วเยอะๆ</span>
+                {orderAddons.includes('โรยงาขาวคั่วเยอะๆ') && <Check className="w-3.5 h-3.5 text-white" />}
+              </button>
+              <button
+                type="button"
+                onClick={() => toggleOrderAddon('ทอดกรอบแห้งพิเศษ')}
+                className={`p-2 rounded-xl border text-left text-xs font-bold flex items-center justify-between cursor-pointer transition-all ${
+                  orderAddons.includes('ทอดกรอบแห้งพิเศษ')
+                    ? 'bg-amber-500 text-white border-amber-500 shadow-xs ring-2 ring-amber-300'
+                    : 'bg-white border-amber-200 text-slate-700 hover:bg-amber-50'
+                }`}
+              >
+                <span>🍟 ทอดกรอบแห้งพิเศษ</span>
+                {orderAddons.includes('ทอดกรอบแห้งพิเศษ') && <Check className="w-3.5 h-3.5 text-white" />}
+              </button>
+            </div>
+          </div>
+
           {/* Quick Discount Adjustment */}
           <div className="flex items-center justify-between pt-1 text-xs">
             <span className="font-semibold text-slate-500 flex items-center gap-1">
@@ -257,7 +301,7 @@ export const PaymentModal: React.FC = () => {
         </div>
 
         {/* Modal Actions */}
-        <div className="p-4 bg-slate-50 border-t border-slate-100 flex gap-2">
+        <div className="sticky bottom-0 bg-white/95 backdrop-blur-xs p-3.5 sm:p-4 border-t border-slate-100 flex gap-2 shadow-lg z-10">
           <button
             onClick={closePaymentModal}
             className="py-3.5 px-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 font-bold text-sm transition-colors"

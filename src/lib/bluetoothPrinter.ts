@@ -114,6 +114,18 @@ export class BluetoothPrinterService {
       timeStyle: 'medium'
     })
     addText(`เวลา: ${dateStr}\n`)
+    if (order.isLineOrder) {
+      addText(`[LINE สั่งกลับบ้าน] คุณ ${order.customerName || ''}\n`)
+      if (order.customerPhone) addText(`โทร: ${order.customerPhone}\n`)
+      if (order.pickupTime) addText(`นัดรับ: ${order.pickupTime}\n`)
+    }
+    if (order.isTableQrOrder) {
+      addText(`[สั่งผ่าน QR โต๊ะ] ${order.tableOrQueue || 'ทานที่ร้าน'}\n`)
+    }
+    
+    if (order.orderAddons && order.orderAddons.length > 0) {
+      addText(`พิเศษ: ${order.orderAddons.join(', ')}\n`)
+    }
     
     if (order.notes) {
       addText(`หมายเหตุ: ${order.notes}\n`)
@@ -125,9 +137,10 @@ export class BluetoothPrinterService {
       const lineTotal = item.price * item.quantity
       const spicy = item.spicyLevel ? SPICY_LEVELS.find(s => s.id === item.spicyLevel)?.label.split(' ')[0] : ''
       const spicyStr = spicy ? `[${spicy}]` : ''
+      const addonsStr = item.addons && item.addons.length > 0 ? ` +${item.addons.join(',')}` : ''
       const noteStr = item.note ? ` (${item.note})` : ''
-      const rawName = `${item.name}${spicyStr}${noteStr}`
-      const itemName = rawName.length > 18 ? rawName.slice(0, 18) + '..' : rawName
+      const rawName = `${item.name}${spicyStr}${addonsStr}${noteStr}`
+      const itemName = rawName.length > 20 ? rawName.slice(0, 20) + '..' : rawName
       const qtyStr = `x${item.quantity}`
       const priceStr = `${lineTotal}.-`
       

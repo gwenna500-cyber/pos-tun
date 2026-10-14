@@ -7,7 +7,10 @@ import {
   Volume2, 
   VolumeX, 
   Check, 
-  RefreshCw
+  RefreshCw,
+  QrCode,
+  UtensilsCrossed,
+  Sparkles
 } from 'lucide-react'
 import { updateOrderStatusInDb, getTodayOrders } from '../lib/db'
 import { updateFirebaseOrderStatus, subscribeToFirebaseOrders, isFirebaseReady } from '../lib/firebase'
@@ -207,25 +210,73 @@ export const KitchenView: React.FC = () => {
                   {/* Card Header: Huge Queue Number & Timer */}
                   <div className="p-3.5 bg-slate-50/90 border-b border-slate-200/80 flex items-center justify-between">
                     <div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none">
                           {order.orderNumber}
                         </span>
-                        <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-slate-200 text-slate-700">
-                          {order.tableOrQueue}
-                        </span>
+                        
+                        {order.isTableQrOrder || order.diningType === 'dine_in' ? (
+                          <span className="text-xs font-black px-2.5 py-1 rounded-lg bg-indigo-600 text-white shadow-2xs flex items-center gap-1">
+                            <UtensilsCrossed className="w-3.5 h-3.5" />
+                            <span>{order.tableOrQueue || 'ทานที่ร้าน'}</span>
+                          </span>
+                        ) : (
+                          <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-slate-200 text-slate-700">
+                            {order.tableOrQueue}
+                          </span>
+                        )}
+
+                        {order.isTableQrOrder && (
+                          <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-800 border border-indigo-200 flex items-center gap-1">
+                            <QrCode className="w-3 h-3 text-indigo-600" />
+                            <span>QR โต๊ะ</span>
+                          </span>
+                        )}
+
+                        {order.isLineOrder && (
+                          <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-[#06C755] text-white shadow-2xs">
+                            LINE สั่งกลับบ้าน
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-1 text-[11px] text-slate-500 mt-1 font-medium">
                         <Clock className="w-3.5 h-3.5" />
                         <span>{getElapsedTime(order.createdAt)}</span>
-                        <span>· {order.diningType === 'takeaway' ? 'กลับบ้าน' : 'ทานที่ร้าน'}</span>
+                        <span>· {order.diningType === 'takeaway' ? '🥡 รับกลับบ้าน' : '🍽️ นั่งทานที่ร้าน'}</span>
                       </div>
+                      {order.isLineOrder && (
+                        <div className="mt-1.5 text-xs font-bold text-emerald-900 bg-emerald-50/80 px-2.5 py-1 rounded-lg border border-emerald-200 flex flex-wrap gap-1.5">
+                          {order.customerName && <span>👤 คุณ {order.customerName}</span>}
+                          {order.customerPhone && <span>· 📞 {order.customerPhone}</span>}
+                          {order.pickupTime && <span>· ⏰ นัดรับ: {order.pickupTime}</span>}
+                        </div>
+                      )}
+                      {order.isTableQrOrder && order.customerName && order.customerName !== order.tableOrQueue && (
+                        <div className="mt-1 text-xs font-semibold text-indigo-900">
+                          <span>👤 คุณ {order.customerName}</span>
+                        </div>
+                      )}
                     </div>
 
                     <span className={`px-2.5 py-1 rounded-full text-xs font-black ${statusBadge}`}>
                       {statusLabel}
                     </span>
                   </div>
+
+                  {/* Order Addons (ตัวเลือกพิเศษของบิล เช่น โรยงาขาวคั่วเยอะๆ, ทอดกรอบแห้งพิเศษ) */}
+                  {order.orderAddons && order.orderAddons.length > 0 && (
+                    <div className="px-3.5 py-2 bg-gradient-to-r from-amber-50 to-orange-50 text-amber-950 border-b border-amber-200 flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[11px] font-black uppercase text-amber-800 bg-amber-200/80 px-2 py-0.5 rounded-md flex items-center gap-1">
+                        <Sparkles className="w-3 h-3 text-amber-700" />
+                        <span>ตัวเลือกพิเศษ:</span>
+                      </span>
+                      {order.orderAddons.map((addon, aIdx) => (
+                        <span key={aIdx} className="text-xs font-black bg-white px-2.5 py-0.5 rounded-lg border border-amber-300 shadow-2xs text-amber-900">
+                          {addon.includes('งา') ? `🌾 ${addon}` : addon.includes('กรอบ') ? `🍟 ${addon}` : addon}
+                        </span>
+                      ))}
+                    </div>
+                  )}
 
                   {/* Order General Notes (if any) */}
                   {order.notes && (
@@ -255,6 +306,11 @@ export const KitchenView: React.FC = () => {
                                 {itemSpicy && (
                                   <span className={`px-2 py-0.5 rounded-md text-xs font-black border ${itemSpicy.badgeClass}`}>
                                     {itemSpicy.label.split(' ')[0]}
+                                  </span>
+                                )}
+                                {item.addons && item.addons.length > 0 && (
+                                  <span className="px-2 py-0.5 rounded-md text-xs font-extrabold bg-amber-100 text-amber-900 border border-amber-300">
+                                    {item.addons.join(' · ')}
                                   </span>
                                 )}
                               </div>

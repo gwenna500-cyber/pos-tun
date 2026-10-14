@@ -17,7 +17,7 @@ function getAudioContext(): AudioContext | null {
 }
 
 // Gentle tap feedback vibration (50ms as specified in user requirements)
-export function triggerHaptic(duration = 50): void {
+export function triggerHaptic(duration: number | number[] = 50): void {
   if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
     try {
       navigator.vibrate(duration)

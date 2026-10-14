@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie'
-import type { Order, MenuItem, SpicyOption } from '../types'
+import type { Order, MenuItem, SpicyOption, TableSession } from '../types'
 import { DEFAULT_MENU_ITEMS, DEFAULT_SHOP_SETTINGS, DEFAULT_SPICY_OPTIONS } from './constants'
 
 export class PosDatabase extends Dexie {
@@ -140,7 +140,12 @@ export async function getSpicyOptionsFromDb(): Promise<SpicyOption[]> {
   try {
     const record = await db.settings.get('spicyOptions')
     if (record && record.value && Array.isArray(record.value) && record.value.length > 0) {
-      return record.value
+      // Remove dry and extra_sesame from spicy levels because they are now order-level checkout addons
+      const filtered = record.value.filter((s: SpicyOption) => s.id !== 'dry' && s.id !== 'extra_sesame')
+      if (filtered.length !== record.value.length) {
+        await db.settings.put({ key: 'spicyOptions', value: filtered })
+      }
+      return filtered.length > 0 ? filtered : DEFAULT_SPICY_OPTIONS
     }
     await db.settings.put({ key: 'spicyOptions', value: DEFAULT_SPICY_OPTIONS })
     return DEFAULT_SPICY_OPTIONS
@@ -157,5 +162,29 @@ export async function saveSpicyOptionsToDb(options: SpicyOption[]): Promise<void
 export async function resetSpicyToDefaultsInDb(): Promise<SpicyOption[]> {
   await db.settings.put({ key: 'spicyOptions', value: DEFAULT_SPICY_OPTIONS })
   return DEFAULT_SPICY_OPTIONS
+}
+
+// ----------------------------------------------------
+// Table Sessions local persistence
+// ----------------------------------------------------
+export async function getTableSessionsFromDb(): Promise<Record<string, TableSession>> {
+  try {
+    const record = await db.settings.get('tableSessions')
+    if (record && record.value && typeof record.value === 'object') {
+      return record.value
+    }
+    return {}
+  } catch (err) {
+    console.error('Error loading table sessions from db:', err)
+    return {}
+  }
+}
+
+export async function saveTableSessionsToDb(sessions: Record<string, TableSession>): Promise<void> {
+  try {
+    await db.settings.put({ key: 'tableSessions', value: sessions })
+  } catch (err) {
+    console.error('Error saving table sessions to db:', err)
+  }
 }
 

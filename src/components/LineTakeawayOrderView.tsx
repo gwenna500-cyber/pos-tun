@@ -1,0 +1,1227 @@
+import React, { useState, useMemo } from 'react'
+import { 
+  Flame, 
+  Clock, 
+  Phone, 
+  User, 
+  Plus, 
+  Minus, 
+  X, 
+  Check, 
+  ArrowLeft, 
+  QrCode, 
+  Banknote, 
+  Send, 
+  MessageCircle, 
+  CheckCircle2, 
+  UtensilsCrossed,
+  Lock,
+  Sparkles
+} from 'lucide-react'
+import confetti from 'canvas-confetti'
+import { usePosStore } from '../store/usePosStore'
+import { MENU_CATEGORIES, DEFAULT_LINE_OA_SETTINGS } from '../lib/constants'
+import { generatePromptPayQrDataUrl } from '../lib/promptpay'
+import { getLineDirectShareUrl } from '../lib/lineNotify'
+import type { MenuItem, CartItem, SpicyLevel, PaymentMethod, Order, DiningType } from '../types'
+
+export const LineTakeawayOrderView: React.FC = () => {
+  const { 
+    menuItems, 
+    spicyOptions, 
+    shopSettings, 
+    tableSessions,
+    submitCustomerOrder,
+    setCurrentView 
+  } = usePosStore()
+
+  const lineSettings = shopSettings.lineOaSettings || DEFAULT_LINE_OA_SETTINGS
+
+  // Read URL query parameters to auto-detect Dine-in Table vs Takeaway
+  const initialParams = useMemo(() => {
+    if (typeof window === 'undefined') return { diningType: 'takeaway' as DiningType, table: 'โต๊ะ 1' }
+    const sp = new URLSearchParams(window.location.search)
+    const hp = new URLSearchParams(window.location.hash.includes('?') ? window.location.hash.split('?')[1] : '')
+    const t = sp.get('table') || hp.get('table')
+    const mode = sp.get('mode') || hp.get('mode')
+
+    if (t) {
+      const cleanTable = t.startsWith('โต๊ะ') ? t : `โต๊ะ ${t}`
+      return { diningType: 'dine_in' as DiningType, table: cleanTable }
+    }
+    if (mode === 'table') {
+      return { diningType: 'dine_in' as DiningType, table: 'โต๊ะ 1' }
+    }
+    return { diningType: 'takeaway' as DiningType, table: 'โต๊ะ 1' }
+  }, [])
+
+  // Order mode state: 'dine_in' (Table QR) or 'takeaway' (LINE takeaway)
+  const [diningType, setDiningType] = useState<DiningType>(initialParams.diningType)
+  const [tableNumber, setTableNumber] = useState<string>(initialParams.table)
+  const [isChangingTable, setIsChangingTable] = useState(false)
+
+  // Real-time table session status
+  const cleanTableNumber = useMemo(() => {
+    return tableNumber.trim().startsWith('โต๊ะ') ? tableNumber.trim() : `โต๊ะ ${tableNumber.trim()}`
+  }, [tableNumber])
+
+  const currentTableSession = tableSessions[cleanTableNumber]
+  const isTableBilled = useMemo(() => {
+    if (diningType !== 'dine_in') return false
+    return currentTableSession?.status === 'billed'
+  }, [diningType, currentTableSession])
+
+  // Local customer cart
+  const [customerCart, setCustomerCart] = useState<CartItem[]>([])
+  const [selectedCategory, setSelectedCategory] = useState<string>('all')
+
+  // Item Options Modal / Bottom Sheet
+  const [activeItem, setActiveItem] = useState<MenuItem | null>(null)
+  const [selectedSpicy, setSelectedSpicy] = useState<SpicyLevel>('medium')
+  const [itemQty, setItemQty] = useState<number>(1)
+  const [itemNote, setItemNote] = useState<string>('')
+
+  // Checkout Sheet
+  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false)
+  const [customerName, setCustomerName] = useState('')
+  const [customerPhone, setCustomerPhone] = useState('')
+  const [pickupOption, setPickupOption] = useState<string>('asap')
+  const [customPickupTime, setCustomPickupTime] = useState('')
+  const [orderNotes, setOrderNotes] = useState('')
+  const [customerOrderAddons, setCustomerOrderAddons] = useState<string[]>([])
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(
+    initialParams.diningType === 'dine_in' ? 'cash' : 'promptpay'
+  )
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const toggleCustomerOrderAddon = (addonName: string) => {
+    setCustomerOrderAddons(prev =>
+      prev.includes(addonName) ? prev.filter(a => a !== addonName) : [...prev, addonName]
+    )
+  }
+
+  // Order Success Screen
+  const [completedOrder, setCompletedOrder] = useState<Order | null>(null)
+  const [promptPayQrUrl, setPromptPayQrUrl] = useState<string>('')
+
+  // Filtered menu
+  const filteredItems = useMemo(() => {
+    return menuItems.filter(item => {
+      if (item.isAvailable === false) return false
+      return selectedCategory === 'all' || item.category === selectedCategory
+    })
+  }, [menuItems, selectedCategory])
+
+  const totalCartCount = customerCart.reduce((sum, item) => sum + item.quantity, 0)
+  const totalCartPrice = customerCart.reduce((sum, item) => sum + item.price * item.quantity, 0)
+
+  // Available spicy options (authentic spice levels only; sesame & extra crispy are selected at checkout)
+  const activeSpicyOptions = useMemo(() => {
+    return spicyOptions.filter(s => s.isAvailable !== false && s.id !== 'dry' && s.id !== 'extra_sesame')
+  }, [spicyOptions])
+
+  // Handle open item sheet
+  const handleItemClick = (item: MenuItem) => {
+    if (item.category === 'drink') {
+      // Direct add drinks
+      addItemToCustomerCart(item, 'none', '', 1, [])
+    } else {
+      setActiveItem(item)
+      setSelectedSpicy(activeSpicyOptions[0]?.id || 'medium')
+      setItemQty(1)
+      setItemNote('')
+    }
+  }
+
+  const addItemToCustomerCart = (
+    item: MenuItem, 
+    spicyLevel: SpicyLevel, 
+    note: string, 
+    quantity: number, 
+    addons: string[] = []
+  ) => {
+    const sortedAddons = [...addons].sort()
+    const addonsKey = JSON.stringify(sortedAddons)
+
+    setCustomerCart(prev => {
+      const idx = prev.findIndex(
+        c => c.menuItemId === item.id && 
+             c.spicyLevel === spicyLevel && 
+             JSON.stringify([...(c.addons || [])].sort()) === addonsKey &&
+             (c.note || '') === (note || '')
+      )
+
+      if (idx > -1) {
+        const next = [...prev]
+        next[idx] = { ...next[idx], quantity: next[idx].quantity + quantity }
+        return next
+      } else {
+        const newItem: CartItem = {
+          cartItemId: `cust-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          menuItemId: item.id,
+          name: item.name,
+          price: item.price,
+          quantity,
+          spicyLevel,
+          category: item.category,
+          note,
+          addons: sortedAddons
+        }
+        return [...prev, newItem]
+      }
+    })
+  }
+
+  const handleConfirmAddItem = () => {
+    if (!activeItem) return
+    addItemToCustomerCart(activeItem, selectedSpicy, itemNote.trim(), itemQty, [])
+    setActiveItem(null)
+  }
+
+  const handleUpdateQty = (cartItemId: string, delta: number) => {
+    setCustomerCart(prev => {
+      return prev
+        .map(i => i.cartItemId === cartItemId ? { ...i, quantity: i.quantity + delta } : i)
+        .filter(i => i.quantity > 0)
+    })
+  }
+
+  // Calculate estimated pickup time text for takeaway
+  const getCalculatedPickupTime = () => {
+    const now = new Date()
+    const interval = lineSettings.pickupIntervalMinutes || 15
+    if (pickupOption === 'asap') {
+      const pickupDate = new Date(now.getTime() + interval * 60000)
+      return `เร็วที่สุด (~${interval} นาที) ประมาณ ${pickupDate.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })} น.`
+    } else if (pickupOption === '30m') {
+      const pickupDate = new Date(now.getTime() + 30 * 60000)
+      return `อีก 30 นาที (~${pickupDate.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })} น.)`
+    } else if (pickupOption === '45m') {
+      const pickupDate = new Date(now.getTime() + 45 * 60000)
+      return `อีก 45 นาที (~${pickupDate.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })} น.)`
+    } else if (pickupOption === 'custom' && customPickupTime) {
+      return `${customPickupTime} น.`
+    }
+    return `เร็วที่สุด (~${interval} นาที)`
+  }
+
+  // Handle final submit
+  const handleCustomerSubmitOrder = async () => {
+    if (customerCart.length === 0) return
+
+    // Validation for Takeaway vs Dine-In
+    if (diningType === 'takeaway') {
+      if (!customerName.trim()) {
+        alert('โปรดระบุชื่อของคุณ เพื่อให้ทางร้านเรียกคิวได้ถูกต้องครับ')
+        return
+      }
+      if (!customerPhone.trim() || customerPhone.replace(/[^0-9]/g, '').length < 9) {
+        alert('โปรดระบุเบอร์โทรศัพท์ที่ติดต่อได้ (อย่างน้อย 9-10 หลัก) ครับ')
+        return
+      }
+    } else {
+      // Dine-In Table order
+      if (!tableNumber.trim()) {
+        alert('โปรดระบุหมายเลขโต๊ะของคุณ (เช่น โต๊ะ 1) ครับ')
+        return
+      }
+      if (isTableBilled) {
+        alert('โต๊ะนี้เช็คบิลเรียบร้อยแล้ว ไม่สามารถส่งออเดอร์เพิ่มได้ กรุณาติดต่อพนักงานครับ')
+        return
+      }
+    }
+
+    setIsSubmitting(true)
+    try {
+      const isDineIn = diningType === 'dine_in'
+      const cleanTable = tableNumber.trim().startsWith('โต๊ะ') ? tableNumber.trim() : `โต๊ะ ${tableNumber.trim()}`
+
+      const order = await submitCustomerOrder({
+        diningType,
+        tableNumber: isDineIn ? cleanTable : undefined,
+        customerName: isDineIn 
+          ? (customerName.trim() || cleanTable)
+          : customerName.trim(),
+        customerPhone: customerPhone.trim(),
+        pickupTime: isDineIn ? undefined : getCalculatedPickupTime(),
+        notes: orderNotes.trim(),
+        items: customerCart,
+        paymentMethod,
+        paymentStatus: paymentMethod === 'promptpay' ? 'paid' : 'pending',
+        orderAddons: customerOrderAddons
+      })
+
+      // Save customer session token locally
+      if (order.tableSessionId) {
+        try {
+          localStorage.setItem(`pos_session_${cleanTable}`, order.tableSessionId)
+        } catch {}
+      }
+
+      // Generate promptpay QR if promptpay selected
+      if (paymentMethod === 'promptpay' && shopSettings.promptpayPhone) {
+        generatePromptPayQrDataUrl(shopSettings.promptpayPhone, order.grandTotal).then(setPromptPayQrUrl)
+      }
+
+      setCompletedOrder(order)
+      setIsCheckoutOpen(false)
+      setCustomerCart([])
+      setCustomerOrderAddons([])
+
+      try {
+        confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } })
+      } catch {}
+    } catch (err: any) {
+      alert(`ไม่สามารถส่งออเดอร์ได้: ${err.message || 'โปรดลองอีกครั้ง'}`)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  // --- Render Order Success Screen ---
+  if (completedOrder) {
+    const isDineIn = completedOrder.diningType === 'dine_in'
+    const lineShareUrl = getLineDirectShareUrl(completedOrder, lineSettings, shopSettings.shopName)
+
+    return (
+      <div className="min-h-screen bg-slate-100 flex flex-col justify-between p-4 sm:p-6 animate-fade-in max-w-lg mx-auto">
+        <div className="bg-white rounded-3xl p-6 shadow-xl border border-slate-200 text-center space-y-4">
+          <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-inner">
+            <CheckCircle2 className="w-10 h-10 stroke-[2.5]" />
+          </div>
+
+          <div>
+            <span className="text-xs font-bold uppercase tracking-wider text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
+              {isDineIn ? 'ส่งออเดอร์เข้าครัวสำเร็จ!' : 'สั่งกลับบ้านสำเร็จ!'}
+            </span>
+            <h2 className="text-2xl font-black text-slate-900 mt-2">
+              {isDineIn ? 'ครัวได้รับออเดอร์ของคุณแล้ว!' : 'ร้านได้รับออเดอร์ของคุณแล้ว!'}
+            </h2>
+            <p className="text-xs text-slate-500 mt-1">
+              {isDineIn 
+                ? `แม่ครัวกำลังปรุงหม่าล่าทอดร้อนๆ เตรียมไปเสิร์ฟที่ ${completedOrder.tableOrQueue} ครับ` 
+                : 'กำลังเตรียมหม่าล่าทอดกรอบสูตรเด็ดให้คุณ มารับตามเวลานัดได้เลยครับ'}
+            </p>
+          </div>
+
+          {/* Huge Queue Card */}
+          <div className="bg-gradient-to-br from-red-600 to-red-700 text-white rounded-2xl p-4 shadow-md text-center">
+            <span className="text-xs font-bold text-red-100 uppercase tracking-wider">
+              {isDineIn ? 'หมายเลขคิวของคุณ' : 'หมายเลขคิวรับอาหาร'}
+            </span>
+            <div className="text-5xl font-black my-1 tracking-tight">
+              {completedOrder.orderNumber}
+            </div>
+            <div className="text-sm text-red-100 font-extrabold flex items-center justify-center gap-1.5 mt-1">
+              {isDineIn ? (
+                <span>🍽️ {completedOrder.tableOrQueue} (นั่งทานที่ร้าน)</span>
+              ) : (
+                <span>👤 คุณ: {completedOrder.customerName} · ⏰ รับ: {completedOrder.pickupTime}</span>
+              )}
+            </div>
+            {completedOrder.orderAddons && completedOrder.orderAddons.length > 0 && (
+              <div className="mt-2 pt-2 border-t border-red-500/40 text-xs text-red-100 flex items-center justify-center gap-1.5 flex-wrap">
+                <span className="font-bold">✨ พิเศษ:</span>
+                {completedOrder.orderAddons.map((addon, idx) => (
+                  <span key={idx} className="bg-white/20 px-2 py-0.5 rounded-md font-bold">
+                    {addon.includes('งา') ? `🌾 ${addon}` : addon.includes('กรอบ') ? `🍟 ${addon}` : addon}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* PromptPay QR Section (if paying with promptpay) */}
+          {completedOrder.paymentMethod === 'promptpay' && (
+            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 space-y-2">
+              <span className="text-xs font-bold text-slate-700 block">
+                สแกนชำระเงินผ่านพร้อมเพย์ ({completedOrder.grandTotal} ฿)
+              </span>
+              {promptPayQrUrl ? (
+                <div className="inline-block bg-white p-2.5 rounded-2xl border border-slate-200 shadow-xs">
+                  <img src={promptPayQrUrl} alt="PromptPay QR" className="w-44 h-44 mx-auto object-contain" />
+                </div>
+              ) : (
+                <div className="w-44 h-44 flex items-center justify-center mx-auto text-xs text-slate-400">
+                  กำลังสร้าง QR...
+                </div>
+              )}
+              <p className="text-[11px] text-slate-500">
+                พร้อมเพย์: <strong className="text-slate-800">{shopSettings.promptpayPhone}</strong> ({shopSettings.shopName})
+              </p>
+            </div>
+          )}
+
+          {/* Dine-In Pay at Counter Notice */}
+          {isDineIn && completedOrder.paymentMethod === 'cash' && (
+            <div className="p-3 bg-amber-50 rounded-2xl border border-amber-200 text-xs text-amber-900 leading-relaxed text-left">
+              <span className="font-bold block mb-0.5">ℹ️ วิธีการชำระเงิน:</span>
+              นั่งรับประทานอาหารที่โต๊ะได้ตามสบายเลยนะคะ เมื่อทานเสร็จเรียบร้อยแล้ว แจ้งหมายเลข <strong>{completedOrder.tableOrQueue}</strong> เพื่อเช็กบิลที่เคาน์เตอร์หน้าร้านได้เลยครับ
+            </div>
+          )}
+
+          {/* Ordered items brief */}
+          <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 text-left text-xs space-y-1">
+            <span className="font-bold text-slate-700 block mb-1">
+              รายการที่สั่ง ({completedOrder.totalItemsCount} รายการ):
+            </span>
+            {completedOrder.items.map((item, idx) => (
+              <div key={idx} className="flex justify-between text-slate-600">
+                <span className="truncate flex-1">{item.name} x{item.quantity}</span>
+                <span className="font-semibold text-slate-900">{item.price * item.quantity} ฿</span>
+              </div>
+            ))}
+            <div className="border-t border-slate-200 pt-1 mt-1 flex justify-between font-black text-slate-900">
+              <span>ยอดรวมทั้งสิ้น:</span>
+              <span className="text-emerald-600">{completedOrder.grandTotal} ฿</span>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="space-y-2 pt-2">
+            {/* If Dine-In: Button to order more food to the same table, or Locked Notice if billed */}
+            {isDineIn ? (
+              isTableBilled ? (
+                <div className="w-full p-4 rounded-2xl bg-amber-50 border border-amber-300 text-amber-950 text-center space-y-1 animate-fade-in shadow-2xs">
+                  <div className="flex items-center justify-center gap-1.5 font-black text-sm text-amber-800">
+                    <Lock className="w-4 h-4 text-amber-600" />
+                    <span>โต๊ะนี้เช็คบิลเรียบร้อยแล้ว</span>
+                  </div>
+                  <p className="text-[11px] text-amber-800 leading-normal">
+                    พนักงานได้ทำการเช็คบิลปิดรอบแล้ว ขอบคุณที่มาอุดหนุนครับ! ไม่สามารถสั่งอาหารเพิ่มเติมในรอบนี้ได้
+                  </p>
+                </div>
+              ) : (
+                <button
+                  onClick={() => {
+                    setCompletedOrder(null)
+                    setPromptPayQrUrl('')
+                  }}
+                  className="w-full py-3.5 px-4 rounded-xl bg-red-600 hover:bg-red-700 active:scale-[0.99] text-white font-extrabold text-sm flex items-center justify-center gap-2 shadow-md shadow-red-200 transition-all cursor-pointer"
+                >
+                  <Plus className="w-5 h-5" />
+                  <span>🥢 สั่งอาหารเพิ่มที่ {completedOrder.tableOrQueue}</span>
+                </button>
+              )
+            ) : (
+              <a
+                href={lineShareUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full py-3.5 px-4 rounded-xl bg-[#06C755] hover:bg-[#05b34c] text-white font-extrabold text-sm flex items-center justify-center gap-2 shadow-md shadow-emerald-200 transition-all cursor-pointer"
+              >
+                <MessageCircle className="w-5 h-5" />
+                <span>ส่งบิลยืนยันเข้า LINE ทางร้าน</span>
+              </a>
+            )}
+
+            {shopSettings.phone && (
+              <a
+                href={`tel:${shopSettings.phone.replace(/[^0-9]/g, '')}`}
+                className="w-full py-3 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
+              >
+                <Phone className="w-4 h-4 text-slate-500" />
+                <span>โทรติดต่อทางร้าน: {shopSettings.phone}</span>
+              </a>
+            )}
+
+            {!isDineIn && (
+              <button
+                onClick={() => {
+                  setCompletedOrder(null)
+                  setPromptPayQrUrl('')
+                }}
+                className="text-xs text-slate-400 hover:text-slate-600 font-medium py-2 block mx-auto underline cursor-pointer"
+              >
+                สั่งอาหารรายการใหม่
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-100 flex flex-col max-w-2xl mx-auto pb-24">
+      {/* Top Header Bar */}
+      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-2xs">
+        <div className="px-4 py-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-red-600 flex items-center justify-center text-white shadow-md shadow-red-200 flex-shrink-0">
+              <Flame className="w-5 h-5 text-amber-300" />
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <h1 className="font-extrabold text-slate-900 text-base leading-tight">
+                  {shopSettings.brandTitle || 'ร้านหม่าล่าทอด ตุ่นฟินเว่อร์'}
+                </h1>
+                {diningType === 'dine_in' ? (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-50 text-indigo-700 border border-indigo-200 flex items-center gap-1">
+                    <UtensilsCrossed className="w-3 h-3" />
+                    <span>{tableNumber}</span>
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    🥡 สั่งกลับบ้าน
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-500 font-medium truncate">
+                {shopSettings.shopName} · {diningType === 'dine_in' ? 'สแกนสั่งที่โต๊ะอาหาร' : `LINE OA: ${lineSettings.lineOaId || '@tunfinver'}`}
+              </p>
+            </div>
+          </div>
+
+          {/* Switch to POS button for staff testing */}
+          <button
+            onClick={() => setCurrentView('pos')}
+            className="text-[11px] font-bold text-slate-500 hover:text-slate-800 bg-slate-100 px-2.5 py-1.5 rounded-lg border border-slate-200 flex items-center gap-1 cursor-pointer"
+            title="กลับไปหน้าแคชเชียร์ POS"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">โหมดแคชเชียร์</span>
+          </button>
+        </div>
+
+        {/* Dining Type Mode Switcher Tab */}
+        <div className="px-4 py-1.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-2 text-xs">
+          <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200 shadow-2xs font-extrabold">
+            <button
+              type="button"
+              onClick={() => {
+                setDiningType('dine_in')
+                setPaymentMethod('cash')
+              }}
+              className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                diningType === 'dine_in'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <UtensilsCrossed className="w-3.5 h-3.5" />
+              <span>ทานที่ร้าน ({tableNumber})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setDiningType('takeaway')
+                setPaymentMethod('promptpay')
+              }}
+              className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                diningType === 'takeaway'
+                  ? 'bg-red-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <span>🥡 สั่งกลับบ้าน</span>
+            </button>
+          </div>
+
+          {/* Table Number Changer (if dining in) */}
+          {diningType === 'dine_in' && (
+            <div className="flex items-center gap-1">
+              {isChangingTable ? (
+                <div className="flex items-center gap-1">
+                  <input
+                    type="text"
+                    value={tableNumber}
+                    onChange={(e) => setTableNumber(e.target.value)}
+                    placeholder="โต๊ะ..."
+                    className="w-16 h-7 px-1.5 text-xs font-black bg-white border border-indigo-400 rounded-lg text-center"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setIsChangingTable(false)}
+                    className="px-2 h-7 bg-indigo-600 text-white rounded-lg text-[10px] font-bold"
+                  >
+                    ตกลง
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setIsChangingTable(true)}
+                  className="text-[11px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded-lg border border-indigo-200 cursor-pointer"
+                >
+                  เปลี่ยนโต๊ะ
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Welcome & Info Banner */}
+        <div className="px-4 py-2 bg-gradient-to-r from-amber-50 to-orange-50 border-t border-amber-200/60 flex items-center justify-between text-xs text-amber-900 font-medium">
+          <div className="flex items-center gap-1.5 truncate">
+            <Clock className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
+            <span className="truncate">
+              {diningType === 'dine_in'
+                ? `นั่งสั่งอาหารที่ ${tableNumber} ได้เลย ออเดอร์จะส่งตรงเข้าครัวทันที`
+                : (lineSettings.customWelcomeNote || 'สั่งล่วงหน้า รับของหน้าร้านได้ทันที')}
+            </span>
+          </div>
+          <span className="flex-shrink-0 text-[11px] font-bold bg-white px-2 py-0.5 rounded-md border border-amber-200 shadow-2xs">
+            รอ ~{lineSettings.pickupIntervalMinutes || 15} นาที
+          </span>
+        </div>
+
+        {/* Category Pills (Only when table is not billed) */}
+        {!isTableBilled && (
+          <div className="px-3 py-2 flex items-center gap-1.5 overflow-x-auto no-scrollbar border-t border-slate-100 bg-white">
+            {MENU_CATEGORIES.map(cat => {
+              const isSelected = selectedCategory === cat.id
+              return (
+                <button
+                  key={cat.id}
+                  onClick={() => setSelectedCategory(cat.id)}
+                  className={`flex-shrink-0 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    isSelected 
+                      ? 'bg-red-600 text-white shadow-xs' 
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  {cat.name}
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </header>
+
+      {/* Table Billed Locked Screen vs Food Items Catalog */}
+      {isTableBilled ? (
+        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center max-w-md mx-auto my-auto animate-fade-in py-12">
+          <div className="w-20 h-20 bg-amber-100 text-amber-600 rounded-3xl flex items-center justify-center mb-4 shadow-inner">
+            <Lock className="w-10 h-10" />
+          </div>
+
+          <span className="px-3.5 py-1 rounded-full text-xs font-black bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1.5">
+            <Lock className="w-3.5 h-3.5 text-amber-700" />
+            <span>เช็คบิลปิดรอบแล้ว</span>
+          </span>
+
+          <h2 className="text-2xl font-black text-slate-900 mt-3">
+            {cleanTableNumber} เช็คบิลเรียบร้อยแล้ว
+          </h2>
+
+          <p className="text-xs sm:text-sm text-slate-500 mt-2 leading-relaxed">
+            โต๊ะนี้ได้รับการเช็คบิลและปิดรอบการรับประทานแล้ว จึงไม่สามารถส่งออเดอร์เพิ่มจากอุปกรณ์เครื่องนี้ได้อีก เพื่อป้องกันการสั่งอาหารซ้ำซ้อนหรือสั่งจากที่อื่น
+          </p>
+
+          <div className="mt-5 p-4 bg-white rounded-2xl border border-slate-200 text-xs text-slate-600 space-y-2 text-left w-full shadow-xs">
+            <div className="font-bold text-slate-900 flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4 text-amber-500" />
+              <span>สำหรับลูกค้าท่านใหม่ที่เพิ่งมานั่งทาน:</span>
+            </div>
+            <p className="text-slate-500 text-[11px] leading-relaxed">
+              กรุณาแจ้งพนักงานเพื่อเปิดโต๊ะใหม่ หรือรอพนักงานเคลียร์โต๊ะสักครู่ เมื่อพนักงานเปิดโต๊ะใหม่แล้ว หน้าจอนี้จะปลดล็อกให้สั่งอาหารได้อัตโนมัติทันทีครับ
+            </p>
+          </div>
+
+          {shopSettings.phone && (
+            <a
+              href={`tel:${shopSettings.phone.replace(/[^0-9]/g, '')}`}
+              className="mt-4 w-full py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
+            >
+              <Phone className="w-4 h-4 text-slate-500" />
+              <span>ติดต่อพนักงาน: {shopSettings.phone}</span>
+            </a>
+          )}
+        </div>
+      ) : (
+        /* Food Items Catalog */
+        <main className="p-3 sm:p-4 space-y-2.5">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+            {filteredItems.map(item => {
+              const inCartQty = customerCart
+                .filter(c => c.menuItemId === item.id)
+                .reduce((s, i) => s + i.quantity, 0)
+
+              return (
+                <div
+                  key={item.id}
+                  onClick={() => handleItemClick(item)}
+                  className="relative bg-white rounded-2xl p-3 border border-slate-200/90 shadow-2xs hover:shadow-md transition-all cursor-pointer flex flex-col justify-between active:scale-[0.98] group"
+                >
+                  <div>
+                    <div className="flex items-center justify-between gap-1 mb-1">
+                      <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-1.5 py-0.2 rounded-md">
+                        {MENU_CATEGORIES.find(c => c.id === item.category)?.name || 'เมนู'}
+                      </span>
+                      <span className="font-black text-base text-emerald-600 tracking-tight">
+                        {item.price} <span className="text-xs font-bold text-emerald-600">฿</span>
+                      </span>
+                    </div>
+
+                    <h3 className="font-bold text-slate-900 text-sm leading-snug line-clamp-2 group-hover:text-red-600 transition-colors">
+                      {item.name}
+                    </h3>
+
+                    {item.description && (
+                      <p className="text-[11px] text-slate-400 mt-1 line-clamp-1">
+                        {item.description}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between">
+                    <span className="text-[10px] text-slate-400 font-medium">
+                      {item.category === 'drink' ? 'แตะสั่งเลย' : 'เลือกรสชาติ'}
+                    </span>
+                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${
+                      inCartQty > 0 
+                        ? 'bg-red-600 text-white font-black text-xs shadow-xs' 
+                        : 'bg-slate-100 text-slate-600 group-hover:bg-red-50 group-hover:text-red-600'
+                    }`}>
+                      {inCartQty > 0 ? inCartQty : <Plus className="w-3.5 h-3.5" />}
+                    </div>
+                  </div>
+
+                  {inCartQty > 0 && (
+                    <div className="absolute inset-0 rounded-2xl border-2 border-red-500 pointer-events-none" />
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </main>
+      )}
+
+      {/* Floating Bottom Cart Bar */}
+      {totalCartCount > 0 && !isTableBilled && (
+        <div className="fixed bottom-0 left-0 right-0 p-3 bg-white/95 backdrop-blur-md border-t border-slate-200 z-40 max-w-2xl mx-auto shadow-xl">
+          <button
+            type="button"
+            onClick={() => setIsCheckoutOpen(true)}
+            className="w-full h-14 bg-red-600 hover:bg-red-700 active:scale-[0.99] text-white rounded-2xl px-4 flex items-center justify-between shadow-lg shadow-red-200 transition-all cursor-pointer"
+          >
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center font-black text-sm">
+                {totalCartCount}
+              </div>
+              <div className="text-left">
+                <span className="font-extrabold text-sm block leading-tight">
+                  {diningType === 'dine_in' ? `ดูรายการ (${tableNumber})` : 'ดูรายการสั่งซื้อ'}
+                </span>
+                <span className="text-[10px] text-red-100">
+                  {diningType === 'dine_in' ? 'แตะเพื่อส่งออเดอร์เข้าครัว' : 'แตะเพื่อเลือกเวลานัดรับ'}
+                </span>
+              </div>
+            </div>
+
+            <div className="text-right">
+              <span className="text-xl font-black">{totalCartPrice}</span>
+              <span className="text-xs ml-0.5">฿</span>
+            </div>
+          </button>
+        </div>
+      )}
+
+      {/* Item Spicy Modal (Bottom Sheet) */}
+      {activeItem && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-end sm:items-center justify-center sm:p-4 animate-fade-in">
+          <div className="fixed inset-0" onClick={() => setActiveItem(null)} />
+          <div className="relative z-10 bg-white w-full rounded-t-3xl sm:rounded-3xl sm:max-w-md shadow-2xl border border-slate-200 flex flex-col max-h-[90vh] overflow-hidden">
+            {/* Mobile Drag Bar */}
+            <div className="sm:hidden pt-2.5 pb-1 flex justify-center bg-slate-50">
+              <div className="w-12 h-1.5 bg-slate-300 rounded-full" />
+            </div>
+
+            {/* Header */}
+            <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+              <div>
+                <span className="text-[11px] font-bold text-red-600 uppercase tracking-wider">
+                  เลือกระดับความเผ็ด & รสชาติ
+                </span>
+                <h3 className="text-base font-black text-slate-900">{activeItem.name}</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-lg font-black text-emerald-600">
+                  {activeItem.price * itemQty} ฿
+                </span>
+                <button
+                  onClick={() => setActiveItem(null)}
+                  className="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="p-4 overflow-y-auto space-y-4 flex-1">
+              {/* Spicy & Flavor Options Grid */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <Flame className="w-4 h-4 text-red-600" />
+                    <span>เลือกระดับความเผ็ด / รสชาติ:</span>
+                  </label>
+                  <span className="text-[10px] text-red-600 font-bold">*เลือก 1 อย่าง</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {activeSpicyOptions.map(spicy => {
+                    const isSelected = selectedSpicy === spicy.id
+                    return (
+                      <button
+                        key={spicy.id}
+                        type="button"
+                        onClick={() => setSelectedSpicy(spicy.id)}
+                        className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                          isSelected
+                            ? 'bg-red-600 text-white border-red-600 shadow-md ring-2 ring-red-300'
+                            : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-800'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-black text-xs sm:text-sm">{spicy.label}</span>
+                          {isSelected && <Check className="w-3.5 h-3.5 text-white" />}
+                        </div>
+                        {spicy.desc && (
+                          <span className={`text-[10px] mt-1 line-clamp-1 ${isSelected ? 'text-red-100' : 'text-slate-400'}`}>
+                            {spicy.desc}
+                          </span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Quantity */}
+              <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 border border-slate-200">
+                <span className="text-xs font-bold text-slate-700">จำนวนที่ต้องการ:</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setItemQty(Math.max(1, itemQty - 1))}
+                    className="w-9 h-9 rounded-xl bg-white border border-slate-300 flex items-center justify-center text-slate-700 font-bold active:scale-95 cursor-pointer"
+                  >
+                    <Minus className="w-4 h-4" />
+                  </button>
+                  <span className="w-8 text-center font-black text-lg text-slate-900">{itemQty}</span>
+                  <button
+                    type="button"
+                    onClick={() => setItemQty(itemQty + 1)}
+                    className="w-9 h-9 rounded-xl bg-white border border-slate-300 flex items-center justify-center text-slate-700 font-bold active:scale-95 cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  หมายเหตุเพิ่มเติม:
+                </label>
+                <input
+                  type="text"
+                  value={itemNote}
+                  onChange={(e) => setItemNote(e.target.value)}
+                  placeholder="เช่น ไม่ใส่กระเทียม, กรอบๆ"
+                  className="w-full h-10 px-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-red-500"
+                />
+              </div>
+            </div>
+
+            {/* Sticky Footer */}
+            <div className="sticky bottom-0 bg-white/95 backdrop-blur-xs p-3.5 border-t border-slate-200 flex gap-2 shadow-lg z-10">
+              <button
+                type="button"
+                onClick={() => setActiveItem(null)}
+                className="py-3 px-4 rounded-xl border border-slate-300 bg-white text-slate-700 font-bold text-sm hover:bg-slate-100 cursor-pointer"
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmAddItem}
+                className="flex-1 py-3 px-4 rounded-xl bg-red-600 hover:bg-red-700 active:scale-[0.99] text-white font-black text-base shadow-md shadow-red-200 flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Plus className="w-5 h-5" />
+                <span>เพิ่มลงตะกร้า ({activeItem.price * itemQty} ฿)</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Checkout Drawer / Sheet */}
+      {isCheckoutOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-end sm:items-center justify-center sm:p-4 animate-fade-in">
+          <div className="fixed inset-0" onClick={() => setIsCheckoutOpen(false)} />
+          <div className="relative z-10 bg-white w-full rounded-t-3xl sm:rounded-3xl sm:max-w-md shadow-2xl border border-slate-200 flex flex-col max-h-[92vh] overflow-hidden">
+            {/* Header */}
+            <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+              <div>
+                <span className="text-[11px] font-bold text-red-600 uppercase tracking-wider">
+                  {diningType === 'dine_in' ? `สั่งอาหารที่ ${tableNumber}` : 'ยืนยันออเดอร์กลับบ้าน'}
+                </span>
+                <h3 className="text-base font-black text-slate-900">
+                  รายการอาหาร ({totalCartCount} ชิ้น)
+                </h3>
+              </div>
+              <button
+                onClick={() => setIsCheckoutOpen(false)}
+                className="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Scrollable Form Body */}
+            <div className="p-4 overflow-y-auto space-y-4 flex-1 text-slate-800">
+              {/* Cart Items List */}
+              <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                {customerCart.map(item => (
+                  <div key={item.cartItemId} className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-200">
+                    <div className="flex-1 pr-2 truncate">
+                      <div className="font-bold text-xs sm:text-sm text-slate-900 truncate">
+                        {item.name}
+                      </div>
+                      <div className="text-[11px] text-slate-500 flex items-center gap-1.5 flex-wrap">
+                        {item.spicyLevel && item.spicyLevel !== 'none' && (
+                          <span className="text-red-600 font-semibold">
+                            [{spicyOptions.find(s => s.id === item.spicyLevel)?.label.split(' ')[0] || item.spicyLevel}]
+                          </span>
+                        )}
+                        {item.note && <span className="text-slate-400">({item.note})</span>}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className="font-black text-xs text-slate-900">
+                        {item.price * item.quantity} ฿
+                      </span>
+                      <div className="flex items-center gap-1 bg-white border border-slate-300 rounded-lg p-0.5">
+                        <button
+                          type="button"
+                          onClick={() => handleUpdateQty(item.cartItemId, -1)}
+                          className="w-6 h-6 flex items-center justify-center text-slate-600 font-bold hover:bg-slate-100 rounded"
+                        >
+                          <Minus className="w-3 h-3" />
+                        </button>
+                        <span className="w-5 text-center font-bold text-xs">{item.quantity}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleUpdateQty(item.cartItemId, 1)}
+                          className="w-6 h-6 flex items-center justify-center text-slate-600 font-bold hover:bg-slate-100 rounded"
+                        >
+                          <Plus className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Total Summary */}
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between">
+                <span className="font-bold text-xs text-slate-700">ยอดรวมทั้งสิ้น:</span>
+                <span className="text-2xl font-black text-emerald-600">{totalCartPrice} ฿</span>
+              </div>
+
+              {/* DINE-IN TABLE DETAILS */}
+              {diningType === 'dine_in' ? (
+                <div className="space-y-3 bg-indigo-50/70 p-3.5 rounded-2xl border border-indigo-200">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-black text-indigo-950 flex items-center gap-1.5">
+                      <UtensilsCrossed className="w-4 h-4 text-indigo-600" />
+                      <span>หมายเลขโต๊ะของคุณ:</span>
+                    </label>
+                    <span className="text-xs font-black text-indigo-700 bg-white px-2.5 py-0.5 rounded-lg border border-indigo-200">
+                      {tableNumber}
+                    </span>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-indigo-900 mb-1">
+                      ชื่อผู้สั่ง (ระบุหรือไม่ก็ได้):
+                    </label>
+                    <input
+                      type="text"
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                      placeholder={`เช่น คุณลูกค้า (${tableNumber})`}
+                      className="w-full h-10 px-3 text-xs bg-white border border-indigo-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-indigo-500 font-medium"
+                    />
+                  </div>
+
+                  {/* Payment Choices for Dine-In */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-indigo-950 mb-1.5">
+                      การชำระเงิน:
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('cash')}
+                        className={`p-2.5 rounded-xl border text-left transition-all ${
+                          paymentMethod === 'cash'
+                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                            : 'bg-white border-indigo-200 text-indigo-950'
+                        }`}
+                      >
+                        <div className="font-extrabold text-xs">เช็กบิลหน้าร้าน</div>
+                        <div className={`text-[10px] mt-0.5 ${paymentMethod === 'cash' ? 'text-indigo-100' : 'text-slate-500'}`}>
+                          ทานเสร็จค่อยจ่าย
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('promptpay')}
+                        className={`p-2.5 rounded-xl border text-left transition-all ${
+                          paymentMethod === 'promptpay'
+                            ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                            : 'bg-white border-indigo-200 text-indigo-950'
+                        }`}
+                      >
+                        <div className="font-extrabold text-xs">พร้อมเพย์ QR</div>
+                        <div className={`text-[10px] mt-0.5 ${paymentMethod === 'promptpay' ? 'text-blue-100' : 'text-slate-500'}`}>
+                          สแกนจ่ายทันที
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* TAKEAWAY DETAILS */
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1">
+                        <User className="w-3.5 h-3.5 text-slate-500" />
+                        <span>ชื่อผู้สั่ง *</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={customerName}
+                        onChange={(e) => setCustomerName(e.target.value)}
+                        placeholder="เช่น คุณกานต์"
+                        className="w-full h-11 px-3 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-red-500 font-medium"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1">
+                        <Phone className="w-3.5 h-3.5 text-slate-500" />
+                        <span>เบอร์โทรศัพท์ *</span>
+                      </label>
+                      <input
+                        type="tel"
+                        value={customerPhone}
+                        onChange={(e) => setCustomerPhone(e.target.value)}
+                        placeholder="เช่น 0891234567"
+                        className="w-full h-11 px-3 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-red-500 font-medium"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  {/* Pickup Time Option */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5 text-slate-500" />
+                      <span>เวลานัดมารับอาหาร:</span>
+                    </label>
+                    <div className="grid grid-cols-2 gap-1.5 text-xs font-bold">
+                      <button
+                        type="button"
+                        onClick={() => setPickupOption('asap')}
+                        className={`p-2.5 rounded-xl border text-left transition-all ${
+                          pickupOption === 'asap'
+                            ? 'bg-red-600 text-white border-red-600 shadow-xs'
+                            : 'bg-slate-50 border-slate-200 text-slate-700'
+                        }`}
+                      >
+                        ⚡ เร็วที่สุด (~{lineSettings.pickupIntervalMinutes || 15} นาที)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPickupOption('30m')}
+                        className={`p-2.5 rounded-xl border text-left transition-all ${
+                          pickupOption === '30m'
+                            ? 'bg-red-600 text-white border-red-600 shadow-xs'
+                            : 'bg-slate-50 border-slate-200 text-slate-700'
+                        }`}
+                      >
+                        🕒 อีก 30 นาที
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPickupOption('45m')}
+                        className={`p-2.5 rounded-xl border text-left transition-all ${
+                          pickupOption === '45m'
+                            ? 'bg-red-600 text-white border-red-600 shadow-xs'
+                            : 'bg-slate-50 border-slate-200 text-slate-700'
+                        }`}
+                      >
+                        🕒 อีก 45 นาที
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPickupOption('custom')}
+                        className={`p-2.5 rounded-xl border text-left transition-all ${
+                          pickupOption === 'custom'
+                            ? 'bg-red-600 text-white border-red-600 shadow-xs'
+                            : 'bg-slate-50 border-slate-200 text-slate-700'
+                        }`}
+                      >
+                        ⏰ ระบุเวลาเอง...
+                      </button>
+                    </div>
+
+                    {pickupOption === 'custom' && (
+                      <div className="mt-2">
+                        <input
+                          type="time"
+                          value={customPickupTime}
+                          onChange={(e) => setCustomPickupTime(e.target.value)}
+                          className="w-full h-10 px-3 text-sm bg-slate-50 border border-slate-300 rounded-xl"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Payment Method Option */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                      เลือกวิธีชำระเงิน:
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('promptpay')}
+                        className={`p-3 rounded-2xl border text-left flex items-center gap-2 transition-all ${
+                          paymentMethod === 'promptpay'
+                            ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                            : 'bg-slate-50 border-slate-200 text-slate-700'
+                        }`}
+                      >
+                        <QrCode className="w-5 h-5 flex-shrink-0" />
+                        <div>
+                          <div className="font-extrabold text-xs">พร้อมเพย์ QR</div>
+                          <div className={`text-[10px] ${paymentMethod === 'promptpay' ? 'text-blue-100' : 'text-slate-400'}`}>
+                            สแกนจ่ายล่วงหน้า
+                          </div>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('cash')}
+                        className={`p-3 rounded-2xl border text-left flex items-center gap-2 transition-all ${
+                          paymentMethod === 'cash'
+                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                            : 'bg-slate-50 border-slate-200 text-slate-700'
+                        }`}
+                      >
+                        <Banknote className="w-5 h-5 flex-shrink-0" />
+                        <div>
+                          <div className="font-extrabold text-xs">เงินสดหน้าร้าน</div>
+                          <div className={`text-[10px] ${paymentMethod === 'cash' ? 'text-emerald-100' : 'text-slate-400'}`}>
+                            จ่ายตอนมารับของ
+                          </div>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Extra Bill Options (ตอนกำลังจะคิดตังค์) */}
+              <div className="bg-amber-50/80 p-3.5 rounded-2xl border border-amber-200/90 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-black text-amber-950 flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4 text-amber-600" />
+                    <span>ตัวเลือกพิเศษของบิลนี้:</span>
+                  </label>
+                  <span className="text-[10px] font-bold text-amber-800 bg-amber-100/90 px-2 py-0.5 rounded-md">
+                    เลือกได้หลายอย่าง (ฟรี)
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => toggleCustomerOrderAddon('โรยงาขาวคั่วเยอะๆ')}
+                    className={`p-2.5 rounded-xl border text-left transition-all text-xs font-black flex items-center justify-between cursor-pointer ${
+                      customerOrderAddons.includes('โรยงาขาวคั่วเยอะๆ')
+                        ? 'bg-amber-500 text-white border-amber-500 shadow-xs ring-2 ring-amber-300'
+                        : 'bg-white border-amber-200 text-amber-950 hover:bg-amber-100/50'
+                    }`}
+                  >
+                    <div className="truncate">🌾 โรยงาขาวคั่วเยอะๆ</div>
+                    {customerOrderAddons.includes('โรยงาขาวคั่วเยอะๆ') && (
+                      <Check className="w-4 h-4 text-white flex-shrink-0" />
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => toggleCustomerOrderAddon('ทอดกรอบแห้งพิเศษ')}
+                    className={`p-2.5 rounded-xl border text-left transition-all text-xs font-black flex items-center justify-between cursor-pointer ${
+                      customerOrderAddons.includes('ทอดกรอบแห้งพิเศษ')
+                        ? 'bg-amber-500 text-white border-amber-500 shadow-xs ring-2 ring-amber-300'
+                        : 'bg-white border-amber-200 text-amber-950 hover:bg-amber-100/50'
+                    }`}
+                  >
+                    <div className="truncate">🍟 ทอดกรอบแห้งพิเศษ</div>
+                    {customerOrderAddons.includes('ทอดกรอบแห้งพิเศษ') && (
+                      <Check className="w-4 h-4 text-white flex-shrink-0" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Order Notes */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  หมายเหตุเพิ่มเติมถึงทางร้าน / ครัว:
+                </label>
+                <input
+                  type="text"
+                  value={orderNotes}
+                  onChange={(e) => setOrderNotes(e.target.value)}
+                  placeholder="เช่น ไม่ใส่กระเทียม, ขอถ้วยจานเพิ่ม"
+                  className="w-full h-10 px-3 text-xs bg-slate-50 border border-slate-200 rounded-xl"
+                />
+              </div>
+            </div>
+
+            {/* Sticky Submit Footer */}
+            <div className="sticky bottom-0 bg-white/95 backdrop-blur-xs p-3.5 border-t border-slate-200 flex gap-2 shadow-lg z-10">
+              <button
+                type="button"
+                onClick={() => setIsCheckoutOpen(false)}
+                className="py-3 px-4 rounded-xl border border-slate-300 bg-white text-slate-700 font-bold text-sm hover:bg-slate-100 cursor-pointer"
+              >
+                แก้ไข
+              </button>
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={handleCustomerSubmitOrder}
+                className="flex-1 py-3 px-4 rounded-xl bg-red-600 hover:bg-red-700 active:scale-[0.99] text-white font-black text-base shadow-md shadow-red-200 flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+              >
+                <Send className="w-5 h-5" />
+                <span>
+                  {isSubmitting 
+                    ? 'กำลังส่งออเดอร์...' 
+                    : diningType === 'dine_in'
+                      ? `ส่งออเดอร์เข้าครัว (${tableNumber} • ${totalCartPrice} ฿)`
+                      : `ยืนยันสั่งกลับบ้าน (${totalCartPrice} ฿)`}
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

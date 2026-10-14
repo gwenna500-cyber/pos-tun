@@ -9,7 +9,8 @@ import {
   Wifi, 
   WifiOff, 
   RefreshCw,
-  ShoppingBag
+  ShoppingBag,
+  QrCode
 } from 'lucide-react'
 import { usePosStore, type PosView } from '../store/usePosStore'
 import { isFirebaseReady, syncPendingOrdersToFirebase } from '../lib/firebase'
@@ -23,10 +24,14 @@ export const Header: React.FC = () => {
     isOnline, 
     pendingSyncCount,
     refreshSyncCount,
-    shopSettings 
+    shopSettings,
+    tableSessions,
+    openTableStatusModal
   } = usePosStore()
 
   const [isSyncing, setIsSyncing] = React.useState(false)
+
+  const occupiedTableCount = Object.values(tableSessions).filter(s => s.status === 'occupied').length
 
   const totalCartCount = cart.reduce((sum, item) => sum + item.quantity, 0)
   const cartSubtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0)
@@ -61,11 +66,13 @@ export const Header: React.FC = () => {
           <div>
             <div className="flex items-center gap-1.5">
               <span className="font-extrabold text-slate-900 text-lg sm:text-xl tracking-tight leading-none">
-                POS <span className="text-red-600">ตุ่น</span>
+                {shopSettings.brandTitle || 'POS ตุ่น'}
               </span>
-              <span className="hidden md:inline-block px-2 py-0.5 text-xs font-semibold bg-red-50 text-red-700 rounded-full border border-red-200">
-                หม่าล่าทอดกรอบ
-              </span>
+              {shopSettings.shopTagline && (
+                <span className="hidden md:inline-block px-2 py-0.5 text-xs font-semibold bg-red-50 text-red-700 rounded-full border border-red-200">
+                  {shopSettings.shopTagline}
+                </span>
+              )}
             </div>
             <p className="text-[11px] text-slate-600 font-medium truncate max-w-[140px] sm:max-w-none">
               {shopSettings.shopName} · {shopSettings.branchName}
@@ -96,6 +103,56 @@ export const Header: React.FC = () => {
 
         {/* Right Section: Network Status & Mobile Quick Cart */}
         <div className="flex items-center gap-2">
+          {/* Table Management & Check Bill Modal Trigger */}
+          <button
+            onClick={openTableStatusModal}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs ${
+              occupiedTableCount > 0
+                ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-amber-200'
+                : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200'
+            }`}
+            title="ผังโต๊ะและเช็คบิล"
+          >
+            <UtensilsCrossed className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">ผังโต๊ะ & เช็คบิล</span>
+            <span className="sm:hidden">โต๊ะ</span>
+            {occupiedTableCount > 0 && (
+              <span className="bg-white text-amber-700 px-1.5 py-0.2 rounded-full text-[10px] font-black">
+                {occupiedTableCount}
+              </span>
+            )}
+          </button>
+
+          {/* Quick link to Table QR customer mode */}
+          <button
+            onClick={() => {
+              try {
+                window.history.pushState({}, '', '?table=1')
+              } catch {}
+              setCurrentView('online-order')
+            }}
+            className="hidden sm:flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-50 text-indigo-800 hover:bg-indigo-100 border border-indigo-300 transition-all cursor-pointer shadow-2xs"
+            title="เปิดดูหน้าสั่งอาหารที่โต๊ะผ่าน QR Code (จำลอง โต๊ะ 1)"
+          >
+            <QrCode className="w-3.5 h-3.5 text-indigo-600" />
+            <span className="text-[11px] sm:text-xs">หน้าสั่ง QR โต๊ะ</span>
+          </button>
+
+          {/* Quick link to LINE Takeaway customer mode */}
+          <button
+            onClick={() => {
+              try {
+                window.history.pushState({}, '', '?mode=order')
+              } catch {}
+              setCurrentView('online-order')
+            }}
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-300 transition-all cursor-pointer shadow-2xs"
+            title="เปิดดูหน้าสั่งอาหารกลับบ้านสำหรับลูกค้าผ่าน LINE"
+          >
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-[11px] sm:text-xs">หน้าสั่ง LINE</span>
+          </button>
+
           {/* Sync & Network status badge */}
           <div className="flex items-center gap-1.5 bg-slate-100 py-1 px-2.5 rounded-lg border border-slate-200 text-xs">
             {isOnline ? (

@@ -9,7 +9,7 @@ import {
   off, 
   type Database 
 } from 'firebase/database'
-import type { Order, ShopSettings, MenuItem, SpicyOption } from '../types'
+import type { Order, ShopSettings, MenuItem, SpicyOption, TableSession } from '../types'
 import { getPendingSyncOrders, markOrderAsSynced } from './db'
 
 let firebaseApp: FirebaseApp | null = null
@@ -215,6 +215,54 @@ export function subscribeToFirebaseSpicyOptions(callback: (options: SpicyOption[
 
   return () => {
     if (realtimeDb) off(spicyRef)
+  }
+}
+
+// ----------------------------------------------------
+// Table Sessions Realtime Sync & Lockout
+// ----------------------------------------------------
+const sanitizeTableKey = (table: string): string => {
+  return encodeURIComponent(table.trim()).replace(/\./g, '_')
+}
+
+// Push/Update a table session (occupied, billed, available)
+export async function updateFirebaseTableSession(session: TableSession): Promise<boolean> {
+  if (!isFirebaseReady() || !realtimeDb) return false
+  try {
+    const key = sanitizeTableKey(session.tableNumber)
+    const sessionRef = ref(realtimeDb, `tableSessions/${key}`)
+    await set(sessionRef, {
+      ...session,
+      syncedAt: Date.now()
+    })
+    return true
+  } catch (error) {
+    console.warn('[Firebase] Could not update table session in Firebase:', error)
+    return false
+  }
+}
+
+// Subscribe to all table sessions in realtime (for both Cashier, Kitchen, and Customers)
+export function subscribeToFirebaseTableSessions(callback: (sessions: Record<string, TableSession>) => void): () => void {
+  if (!isFirebaseReady() || !realtimeDb) return () => {}
+  const sessionsRef = ref(realtimeDb, 'tableSessions')
+  onValue(sessionsRef, (snapshot) => {
+    if (snapshot.exists()) {
+      const data = snapshot.val() || {}
+      const map: Record<string, TableSession> = {}
+      Object.values(data).forEach((item: any) => {
+        if (item && item.tableNumber) {
+          map[item.tableNumber] = item as TableSession
+        }
+      })
+      callback(map)
+    } else {
+      callback({})
+    }
+  }, (err) => console.warn('[Firebase] Error listening to table sessions:', err))
+
+  return () => {
+    if (realtimeDb) off(sessionsRef)
   }
 }
 

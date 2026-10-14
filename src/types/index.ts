@@ -61,6 +61,7 @@ export interface CartItem {
   stickColorId?: StickColorId
   category?: string
   note?: string
+  addons?: string[] // e.g. ['โรยงาขาวคั่ว', 'ทอดกรอบแห้งพิเศษ']
 }
 
 export interface MenuItem {
@@ -89,6 +90,7 @@ export interface Order {
   cookingMethod?: CookingMethod
   diningType: DiningType
   notes: string
+  orderAddons?: string[] // e.g. ['โรยงาขาวคั่วเยอะๆ', 'ทอดกรอบแห้งพิเศษ']
 
   // Payment
   paymentMethod: PaymentMethod
@@ -102,12 +104,51 @@ export interface Order {
   updatedAt: number
   completedAt?: number
 
+  // LINE Takeaway & Table QR details
+  isLineOrder?: boolean
+  isTableQrOrder?: boolean
+  tableNumber?: string
+  tableSessionId?: string
+  customerName?: string
+  customerPhone?: string
+  pickupTime?: string
+
   // Sync
   syncStatus: SyncStatus
   firebaseId?: string
 }
 
+export type TableStatus = 'available' | 'occupied' | 'billed'
+
+export interface TableSession {
+  tableNumber: string
+  sessionId: string
+  status: TableStatus
+  openedAt: number
+  billedAt?: number
+  totalAmount?: number
+  orderCount?: number
+  lastOrderAt?: number
+  customerName?: string
+  paymentMethod?: PaymentMethod
+}
+
+export interface LineOaSettings {
+  enabled: boolean                // เปิด/ปิดระบบสั่งกลับบ้านผ่าน LINE OA
+  lineOaId: string                // e.g. "@tunfinver"
+  lineOaUrl: string               // e.g. "https://line.me/R/ti/p/@tunfinver"
+  customOrderBaseUrl?: string     // e.g. "https://pos-tun.netlify.app" ลิงก์ Netlify หรือโดเมนจริงของร้าน
+  webhookUrl?: string             // LINE Webhook / Make / Zapier / Webhook URL
+  notifyToken?: string            // LINE Notify Token หรือ Channel Access Token
+  autoNotifyOnOrder: boolean      // แจ้งเตือนเข้า LINE อัตโนมัติเมื่อลูกค้าสั่งออเดอร์
+  notifySound: boolean            // ส่งเสียงเตือนในแคชเชียร์/ครัวเมื่อมีออเดอร์จาก LINE
+  pickupIntervalMinutes: number   // เวลาเตรียมออเดอร์โดยเฉลี่ย เช่น 15 นาที
+  customWelcomeNote?: string      // ข้อความแจ้งลูกค้า
+}
+
 export interface ShopSettings {
+  brandTitle?: string
+  shopTagline?: string
   shopName: string
   branchName: string
   promptpayPhone: string
@@ -118,6 +159,12 @@ export interface ShopSettings {
   soundEnabled: boolean
   hapticEnabled: boolean
   autoPrintReceipt: boolean
+  // Table QR Ordering Settings
+  tableOrderingEnabled?: boolean
+  tableCount?: number
+  tableList?: string[]
+  // LINE OA Settings
+  lineOaSettings?: LineOaSettings
   // Firebase configuration
   firebaseEnabled: boolean
   firebaseConfig: {

@@ -8,6 +8,8 @@ import { SettingsView } from './components/SettingsView'
 import { MenuManagementView } from './components/MenuManagementView'
 import { PaymentModal } from './components/PaymentModal'
 import { ReceiptSlip } from './components/ReceiptSlip'
+import { LineTakeawayOrderView } from './components/LineTakeawayOrderView'
+import { TableStatusModal } from './components/TableStatusModal'
 import { usePosStore } from './store/usePosStore'
 import { initializeDatabase, db } from './lib/db'
 import { initFirebaseService } from './lib/firebase'
@@ -82,6 +84,10 @@ export const App: React.FC = () => {
   const totalCartCount = cart.reduce((sum, item) => sum + item.quantity, 0)
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0)
   const grandTotal = Math.max(0, subtotal - (discount || 0))
+
+  if (currentView === 'online-order') {
+    return <LineTakeawayOrderView />
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col text-slate-800">
@@ -160,6 +166,7 @@ export const App: React.FC = () => {
       {/* Global Modals */}
       <PaymentModal />
       <ReceiptSlip />
+      <TableStatusModal />
     </div>
   )
 }

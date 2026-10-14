@@ -1,6 +1,5 @@
 import React, { useEffect } from 'react'
 import { Header } from './components/Header'
-import { StickQuickBar } from './components/StickQuickBar'
 import { MenuCatalog } from './components/MenuCatalog'
 import { CartPanel } from './components/CartPanel'
 import { KitchenView } from './components/KitchenView'
@@ -90,11 +89,8 @@ export const App: React.FC = () => {
       <main className="flex-1 flex flex-col">
         {currentView === 'pos' && (
           <div className="flex-1 flex flex-col lg:flex-row max-w-[1600px] w-full mx-auto">
-            {/* Left Section (65% on iPad / Desktop Landscape): Sticks & Menu */}
+            {/* Left Section (65% on iPad / Desktop Landscape): Menu Catalog */}
             <div className="w-full lg:w-[65%] p-3 sm:p-4 sm:pr-2 flex flex-col min-h-0 pb-24 lg:pb-4">
-              {/* Stick Color Quick Bar */}
-              <StickQuickBar />
-
               {/* Menu Items Catalog */}
               <div className="flex-1">
                 <MenuCatalog />

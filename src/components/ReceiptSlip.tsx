@@ -122,7 +122,7 @@ export const ReceiptSlip: React.FC = () => {
               {/* Totals */}
               <div className="py-2 border-b border-dashed border-slate-300 space-y-1 text-right">
                 <div className="text-[10px] text-slate-500">
-                  รวม {order.totalItemsCount} ไม้: {order.subtotal} ฿
+                  รวม {order.totalItemsCount} รายการ: {order.subtotal} ฿
                 </div>
                 {order.discount > 0 && (
                   <div className="text-[10px] text-emerald-600 font-bold">
@@ -227,7 +227,7 @@ export const ReceiptSlip: React.FC = () => {
         <div style={{ borderBottom: '1px dashed #000', margin: '6px 0' }} />
 
         <div style={{ textAlign: 'right', fontSize: '11px' }}>
-          <div>รวม {order.totalItemsCount} ไม้: {order.subtotal} ฿</div>
+          <div>รวม {order.totalItemsCount} รายการ: {order.subtotal} ฿</div>
           {order.discount > 0 && <div>ส่วนลด: -{order.discount} ฿</div>}
           <div style={{ fontSize: '14px', fontWeight: 'bold', marginTop: '3px' }}>
             ยอดสุทธิ: {order.grandTotal} บาท

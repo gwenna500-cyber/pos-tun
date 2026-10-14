@@ -9,7 +9,7 @@ import {
   X 
 } from 'lucide-react'
 import { usePosStore } from '../store/usePosStore'
-import { SPICY_LEVELS, COOKING_METHODS, DINING_TYPES, STICK_COLORS } from '../lib/constants'
+import { SPICY_LEVELS, COOKING_METHODS, DINING_TYPES } from '../lib/constants'
 
 interface CartPanelProps {
   isMobileDrawer?: boolean
@@ -55,7 +55,7 @@ export const CartPanel: React.FC<CartPanelProps> = ({ isMobileDrawer = false }) 
               ตะกร้าสินค้า
             </h2>
             <span className="text-xs text-slate-500 font-medium">
-              {totalItemsCount} ไม้/รายการ
+              {totalItemsCount} รายการ
             </span>
           </div>
         </div>
@@ -89,26 +89,20 @@ export const CartPanel: React.FC<CartPanelProps> = ({ isMobileDrawer = false }) 
             <ShoppingBag className="w-10 h-10 mb-2 text-slate-300 stroke-1" />
             <p className="text-sm font-semibold text-slate-600">ยังไม่มีรายการในตะกร้า</p>
             <p className="text-xs text-slate-400 mt-0.5">
-              แตะปุ่มสีไม้หรือเมนูด้านซ้ายเพื่อเริ่มสั่งอาหาร
+              แตะเมนูหม่าล่าทอดเพื่อเริ่มสั่งอาหาร
             </p>
           </div>
         ) : (
           cart.map((item) => {
-            const stickInfo = item.stickColorId ? STICK_COLORS.find(s => s.id === item.stickColorId) : null
             return (
               <div
                 key={item.cartItemId}
                 className="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-200/80 hover:border-slate-300 transition-colors"
               >
                 <div className="flex-1 min-w-0 pr-2">
-                  <div className="flex items-center gap-1.5">
-                    {stickInfo && (
-                      <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${stickInfo.bgClass.split(' ')[0]}`} />
-                    )}
-                    <h4 className="font-bold text-slate-900 text-sm truncate">
-                      {item.name}
-                    </h4>
-                  </div>
+                  <h4 className="font-bold text-slate-900 text-sm truncate">
+                    {item.name}
+                  </h4>
                   <span className="text-xs text-slate-500 font-medium">
                     {item.price}฿ × {item.quantity} = <strong className="text-slate-800">{item.price * item.quantity}฿</strong>
                   </span>
@@ -269,7 +263,7 @@ export const CartPanel: React.FC<CartPanelProps> = ({ isMobileDrawer = false }) 
         {/* Totals & Grand Total Summary */}
         <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-200/80 space-y-1 text-xs">
           <div className="flex justify-between text-slate-500">
-            <span>ยอดรวม ({totalItemsCount} ไม้):</span>
+            <span>ยอดรวม ({totalItemsCount} รายการ):</span>
             <span className="font-semibold text-slate-800">{subtotal} ฿</span>
           </div>
           {discount > 0 && (

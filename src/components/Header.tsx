@@ -62,7 +62,7 @@ export const Header: React.FC = () => {
                 POS <span className="text-red-600">ตุ่น</span>
               </span>
               <span className="hidden md:inline-block px-2 py-0.5 text-xs font-semibold bg-red-50 text-red-700 rounded-full border border-red-200">
-                หม่าล่า & ของทอด
+                หม่าล่าทอดกรอบ
               </span>
             </div>
             <p className="text-[11px] text-slate-600 font-medium truncate max-w-[140px] sm:max-w-none">

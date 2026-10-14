@@ -109,7 +109,7 @@ export const PaymentModal: React.FC = () => {
               {grandTotal} <span className="text-2xl font-bold">บาท</span>
             </div>
             <div className="mt-1 text-xs text-red-100 flex items-center justify-center gap-2">
-              <span>{cart.reduce((s, i) => s + i.quantity, 0)} ไม้</span>
+              <span>{cart.reduce((s, i) => s + i.quantity, 0)} รายการ</span>
               {discount > 0 && <span>· ส่วนลด {discount} ฿</span>}
             </div>
           </div>

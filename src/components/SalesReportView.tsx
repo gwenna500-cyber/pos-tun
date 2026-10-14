@@ -6,12 +6,12 @@ import {
   Download, 
   RotateCcw, 
   Calendar, 
-  CheckCircle2 
+  CheckCircle2,
+  Award
 } from 'lucide-react'
 import { getTodayOrders } from '../lib/db'
-import { STICK_COLORS } from '../lib/constants'
 import { usePosStore } from '../store/usePosStore'
-import type { Order, StickColorId } from '../types'
+import type { Order } from '../types'
 
 export const SalesReportView: React.FC = () => {
   const { openReceiptModal } = usePosStore()
@@ -32,28 +32,21 @@ export const SalesReportView: React.FC = () => {
 
   // Calculate statistics
   const totalRevenue = orders.reduce((sum, o) => sum + o.grandTotal, 0)
-  const totalSkewers = orders.reduce((sum, o) => sum + o.totalItemsCount, 0)
+  const totalItemsSold = orders.reduce((sum, o) => sum + o.totalItemsCount, 0)
   const totalOrders = orders.length
 
-  // Stick color breakdown
-  const stickBreakdown: Record<StickColorId, { name: string; count: number; total: number; bg: string }> = {
-    red: { name: 'ไม้แดง (10฿)', count: 0, total: 0, bg: 'bg-red-500' },
-    yellow: { name: 'ไม้เหลือง (15฿)', count: 0, total: 0, bg: 'bg-amber-400' },
-    green: { name: 'ไม้เขียว (20฿)', count: 0, total: 0, bg: 'bg-emerald-500' },
-    blue: { name: 'ไม้ฟ้า (25฿)', count: 0, total: 0, bg: 'bg-sky-500' },
-    purple: { name: 'ไม้ม่วง (30฿)', count: 0, total: 0, bg: 'bg-purple-500' },
-    orange: { name: 'ไม้ส้ม (35฿)', count: 0, total: 0, bg: 'bg-orange-500' },
-    custom: { name: 'กำหนดเอง', count: 0, total: 0, bg: 'bg-slate-500' }
-  }
-
+  // Top Selling Items Breakdown
+  const itemMap: Record<string, { name: string; count: number; total: number }> = {}
   orders.forEach(order => {
     order.items.forEach(item => {
-      if (item.stickColorId && stickBreakdown[item.stickColorId]) {
-        stickBreakdown[item.stickColorId].count += item.quantity
-        stickBreakdown[item.stickColorId].total += item.price * item.quantity
+      if (!itemMap[item.name]) {
+        itemMap[item.name] = { name: item.name, count: 0, total: 0 }
       }
+      itemMap[item.name].count += item.quantity
+      itemMap[item.name].total += item.price * item.quantity
     })
   })
+  const topSellingItems = Object.values(itemMap).sort((a, b) => b.count - a.count)
 
   // Payment Breakdown
   const paymentBreakdown = {
@@ -65,7 +58,7 @@ export const SalesReportView: React.FC = () => {
   // Export CSV
   const handleExportCsv = () => {
     if (orders.length === 0) return
-    let csv = 'คิว,เวลา,รายการ,จำนวนไม้,วิธีปรุง,ระดับเผ็ด,วิธีชำระ,ยอดสุทธิ (บาท)\n'
+    let csv = 'คิว,เวลา,รายการ,จำนวนรายการ,วิธีปรุง,ระดับเผ็ด,วิธีชำระ,ยอดสุทธิ (บาท)\n'
     orders.forEach(o => {
       const timeStr = new Date(o.createdAt).toLocaleTimeString('th-TH')
       const itemsStr = o.items.map(i => `${i.name}x${i.quantity}`).join(' | ')
@@ -96,7 +89,7 @@ export const SalesReportView: React.FC = () => {
         <div>
           <h1 className="text-xl sm:text-2xl font-black text-slate-900 flex items-center gap-2">
             <BarChart3 className="w-6 h-6 text-red-600" />
-            <span>สรุปยอดขายประจำวัน (Sales Summary)</span>
+            <span>สรุปยอดขายประจำวัน (ร้านหม่าล่าทอด)</span>
           </h1>
           <p className="text-xs text-slate-500 font-medium mt-0.5 flex items-center gap-1.5">
             <Calendar className="w-3.5 h-3.5" />
@@ -143,12 +136,12 @@ export const SalesReportView: React.FC = () => {
         <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs flex items-center justify-between">
           <div>
             <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-              จำนวนไม้ที่ขายได้
+              จำนวนรายการที่ขายได้
             </span>
             <div className="text-3xl font-black text-slate-900 mt-1">
-              {totalSkewers.toLocaleString()} <span className="text-base font-bold text-slate-700">ไม้</span>
+              {totalItemsSold.toLocaleString()} <span className="text-base font-bold text-slate-700">ชิ้น/รายการ</span>
             </div>
-            <span className="text-[11px] text-slate-400 mt-0.5 block">รวมทุกสีและทุกรายการ</span>
+            <span className="text-[11px] text-slate-400 mt-0.5 block">รวมทุกเมนูหม่าล่าทอด</span>
           </div>
           <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center">
             <ShoppingBag className="w-6 h-6" />
@@ -173,37 +166,49 @@ export const SalesReportView: React.FC = () => {
         </div>
       </div>
 
-      {/* Skewer Color Breakdown & Payment Breakdown */}
+      {/* Top Selling Items & Payment Breakdown */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* Color Skewers Breakdown */}
+        {/* Top Selling Menu Items */}
         <div className="lg:col-span-2 bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
-          <h3 className="font-black text-slate-900 text-base mb-3">
-            สถิติจำนวนไม้แยกตามสี (ช่วยเช็กสต็อกไม้)
-          </h3>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {STICK_COLORS.map(stick => {
-              const data = stickBreakdown[stick.id]
-              return (
+          <div className="flex items-center justify-between mb-3.5">
+            <h3 className="font-black text-slate-900 text-base flex items-center gap-1.5">
+              <Award className="w-5 h-5 text-amber-500" />
+              <span>อันดับเมนูขายดีประจำวัน (Top Selling Items)</span>
+            </h3>
+            <span className="text-xs text-slate-400 font-medium">เรียงตามจำนวนที่ขายได้</span>
+          </div>
+
+          {topSellingItems.length === 0 ? (
+            <div className="text-center py-8 text-slate-400 text-xs">
+              ยังไม่มีข้อมูลการขายในวันนี้
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+              {topSellingItems.slice(0, 8).map((item, idx) => (
                 <div
-                  key={stick.id}
-                  className="p-3.5 rounded-xl border border-slate-200/80 bg-slate-50 flex flex-col justify-between"
+                  key={item.name}
+                  className="flex items-center justify-between p-2.5 rounded-xl border border-slate-100 bg-slate-50/80 hover:bg-slate-100/70 transition-colors"
                 >
-                  <div className="flex items-center gap-2">
-                    <span className={`w-3.5 h-3.5 rounded-full ${stick.bgClass.split(' ')[0]}`} />
-                    <span className="text-xs font-bold text-slate-700">{stick.name}</span>
-                  </div>
-                  <div className="mt-2">
-                    <div className="text-2xl font-black text-slate-900">
-                      {data ? data.count : 0} <span className="text-xs font-bold text-slate-500">ไม้</span>
-                    </div>
-                    <span className="text-xs font-semibold text-slate-500">
-                      {data ? data.total.toLocaleString() : 0} ฿
+                  <div className="flex items-center gap-2.5">
+                    <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black ${
+                      idx === 0 ? 'bg-amber-400 text-slate-950 shadow-xs' :
+                      idx === 1 ? 'bg-slate-300 text-slate-800' :
+                      idx === 2 ? 'bg-amber-700 text-white' : 'bg-slate-200 text-slate-600'
+                    }`}>
+                      {idx + 1}
                     </span>
+                    <span className="font-bold text-slate-800 text-sm">{item.name}</span>
+                  </div>
+
+                  <div className="text-right">
+                    <span className="font-black text-slate-900 text-sm">{item.count}</span>
+                    <span className="text-xs text-slate-500 ml-1">ชิ้น</span>
+                    <span className="text-xs text-slate-400 ml-2">({item.total.toLocaleString()} ฿)</span>
                   </div>
                 </div>
-              )
-            })}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Payment Methods */}
@@ -280,7 +285,7 @@ export const SalesReportView: React.FC = () => {
                     {new Date(o.createdAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
                   </td>
                   <td className="py-3 px-4">
-                    <span className="font-semibold text-slate-800">{o.totalItemsCount} ไม้</span>
+                    <span className="font-semibold text-slate-800">{o.totalItemsCount} รายการ</span>
                     <span className="block text-[10px] text-slate-400 truncate max-w-xs">
                       {o.items.map(i => `${i.name}x${i.quantity}`).join(', ')}
                     </span>

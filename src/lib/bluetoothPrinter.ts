@@ -140,7 +140,7 @@ export class BluetoothPrinterService {
 
     // Right Align for Totals
     addBytes(ESC, 0x61, 2)
-    addText(`รวมจำนวนไม้: ${order.totalItemsCount} ไม้\n`)
+    addText(`รวมจำนวนรายการ: ${order.totalItemsCount} รายการ\n`)
     if (order.discount > 0) {
       addText(`ส่วนลด: -${order.discount} ฿\n`)
     }

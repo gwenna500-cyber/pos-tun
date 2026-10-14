@@ -188,16 +188,16 @@ export const KitchenView: React.FC = () => {
               // Status theme
               let statusBorder = 'border-amber-300'
               let statusBadge = 'bg-amber-100 text-amber-800'
-              let statusLabel = 'รอย่าง/ทอด'
+              let statusLabel = 'รอลงทอด'
 
               if (order.status === 'cooking') {
                 statusBorder = 'border-blue-400 shadow-md ring-2 ring-blue-100'
                 statusBadge = 'bg-blue-600 text-white'
-                statusLabel = 'กำลังปรุง...'
+                statusLabel = 'กำลังทอด...'
               } else if (order.status === 'ready') {
                 statusBorder = 'border-emerald-400 shadow-sm bg-emerald-50/20'
                 statusBadge = 'bg-emerald-600 text-white'
-                statusLabel = 'พร้อมเสิร์ฟ'
+                statusLabel = 'ทอดเสร็จแล้ว'
               }
 
               return (
@@ -251,7 +251,7 @@ export const KitchenView: React.FC = () => {
                   {/* Items List (Large text for kitchen staff) */}
                   <div className="p-3.5 space-y-2 flex-1">
                     <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                      รายการอาหาร ({order.totalItemsCount} ไม้):
+                      รายการอาหาร ({order.totalItemsCount} รายการ):
                     </div>
                     <div className="space-y-1.5">
                       {order.items.map((item, idx) => (
@@ -278,7 +278,7 @@ export const KitchenView: React.FC = () => {
                         className="w-full h-13 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white font-black text-base shadow-md flex items-center justify-center gap-2 cursor-pointer transition-all"
                       >
                         <Flame className="w-5 h-5" />
-                        <span>เริ่มทอด / เริ่มย่าง</span>
+                        <span>เริ่มลงทอด</span>
                       </button>
                     )}
 

@@ -98,7 +98,7 @@ export const usePosStore = create<PosState>((set, get) => ({
   setMenuItems: (menuItems) => set({ menuItems }),
 
   addStickByColor: (colorId) => {
-    const stick = STICK_COLORS.find(s => s.id === colorId)
+    const stick = (STICK_COLORS as any[]).find(s => s.id === colorId)
     if (!stick) return
 
     const { shopSettings } = get()

@@ -25,6 +25,12 @@ export async function initializeDatabase(): Promise<void> {
     const menuCount = await db.menu.count()
     if (menuCount === 0) {
       await db.menu.bulkAdd(DEFAULT_MENU_ITEMS)
+    } else {
+      const firstItem = await db.menu.toCollection().first()
+      if (firstItem && firstItem.stickColorId) {
+        await db.menu.clear()
+        await db.menu.bulkAdd(DEFAULT_MENU_ITEMS)
+      }
     }
 
     const settingsCount = await db.settings.count()

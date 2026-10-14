@@ -58,7 +58,7 @@ export const ReceiptSlip: React.FC = () => {
   return (
     <>
       {/* Visual Screen Modal */}
-      <div className="no-print fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-fade-in">
+      <div className="no-print fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-fade-in">
         <div className="bg-white rounded-3xl max-w-sm w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[95vh]">
           {/* Header */}
           <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
@@ -68,7 +68,7 @@ export const ReceiptSlip: React.FC = () => {
             </div>
             <button
               onClick={closeReceiptModal}
-              className="w-8 h-8 rounded-full bg-slate-200 text-slate-600 hover:bg-slate-300 flex items-center justify-center"
+              className="w-8 h-8 rounded-full bg-slate-200 text-slate-600 hover:bg-slate-300 flex items-center justify-center cursor-pointer transition-colors"
             >
               <X className="w-4 h-4" />
             </button>
@@ -206,9 +206,9 @@ export const ReceiptSlip: React.FC = () => {
 
             <button
               onClick={closeReceiptModal}
-              className="w-full py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-extrabold text-sm transition-colors shadow-xs"
+              className="w-full py-2.5 rounded-xl bg-red-600 hover:bg-red-700 active:scale-98 text-white font-extrabold text-sm transition-all shadow-xs cursor-pointer"
             >
-              รับออเดอร์ถัดไป
+              ปิดหน้าต่าง / รับออเดอร์ถัดไป
             </button>
           </div>
         </div>

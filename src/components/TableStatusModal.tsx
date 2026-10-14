@@ -16,7 +16,7 @@ import {
 import { usePosStore } from '../store/usePosStore'
 import { db } from '../lib/db'
 import { SPICY_LEVELS } from '../lib/constants'
-import type { Order, PaymentMethod } from '../types'
+import type { Order, PaymentMethod, CartItem } from '../types'
 
 export const TableStatusModal: React.FC = () => {
   const { 
@@ -109,6 +109,57 @@ export const TableStatusModal: React.FC = () => {
     setSelectedTableForBilling(tableName)
   }
 
+  const handlePrintCombinedTableReceipt = (tableName: string, orders: Order[]) => {
+    if (!orders || orders.length === 0) return
+    if (orders.length === 1) {
+      openReceiptModal(orders[0])
+      return
+    }
+
+    // Combine items from all orders of this table session
+    const combinedItems: CartItem[] = []
+    orders.forEach(ord => {
+      ord.items.forEach(item => {
+        const existing = combinedItems.find(
+          i => (i.menuItemId && item.menuItemId ? i.menuItemId === item.menuItemId : i.name === item.name) && 
+               i.spicyLevel === item.spicyLevel && 
+               JSON.stringify(i.addons || []) === JSON.stringify(item.addons || [])
+        )
+        if (existing) {
+          existing.quantity += item.quantity
+        } else {
+          combinedItems.push({ ...item })
+        }
+      })
+    })
+
+    const latestOrder = orders[orders.length - 1]
+    const combinedOrder: Order = {
+      id: `combined_${tableName}_${Date.now()}`,
+      orderNumber: `${tableName} (บิลรวม)`,
+      tableOrQueue: tableName,
+      tableNumber: tableName,
+      diningType: 'dine_in',
+      items: combinedItems,
+      subtotal: orders.reduce((sum, o) => sum + o.subtotal, 0),
+      discount: orders.reduce((sum, o) => sum + (o.discount || 0), 0),
+      grandTotal: orders.reduce((sum, o) => sum + o.grandTotal, 0),
+      totalItemsCount: combinedItems.reduce((sum, i) => sum + i.quantity, 0),
+      paymentMethod: latestOrder?.paymentMethod || billingPaymentMethod || 'cash',
+      paymentStatus: 'paid',
+      status: 'completed',
+      createdAt: orders[0]?.createdAt || Date.now(),
+      updatedAt: Date.now(),
+      completedAt: Date.now(),
+      notes: orders.filter(o => o.notes).map(o => o.notes).join(' | '),
+      orderAddons: Array.from(new Set(orders.flatMap(o => o.orderAddons || []))),
+      isTableQrOrder: true,
+      syncStatus: 'synced'
+    }
+
+    openReceiptModal(combinedOrder)
+  }
+
   const handleConfirmBill = async (tableName: string) => {
     setIsProcessing(true)
     try {
@@ -117,6 +168,19 @@ export const TableStatusModal: React.FC = () => {
       // Refresh local orders
       const orders = await db.orders.toArray()
       setAllRecentOrders(orders)
+
+      // Open receipt immediately upon checkout
+      const tableOrders = orders.filter(
+        o => (o.tableNumber === tableName || o.tableOrQueue === tableName) && 
+             o.status !== 'cancelled'
+      )
+      if (tableOrders.length > 0) {
+        if (tableOrders.length === 1) {
+          openReceiptModal(tableOrders[0])
+        } else {
+          handlePrintCombinedTableReceipt(tableName, tableOrders)
+        }
+      }
     } catch (err: any) {
       alert(`ไม่สามารถเช็คบิลได้: ${err.message || 'โปรดลองอีกครั้ง'}`)
     } finally {
@@ -692,6 +756,22 @@ export const TableStatusModal: React.FC = () => {
                 <X className="w-4 h-4" />
               </button>
             </div>
+
+            {selectedTableOrders.orders.length > 1 && (
+              <div className="px-5 py-2.5 bg-indigo-50 border-b border-indigo-100 flex items-center justify-between gap-3">
+                <div className="text-xs font-bold text-indigo-900">
+                  มี {selectedTableOrders.orders.length} บิลในโต๊ะนี้
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handlePrintCombinedTableReceipt(selectedTableOrders.table, selectedTableOrders.orders)}
+                  className="py-1.5 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-black text-xs flex items-center gap-1.5 shadow-sm shadow-indigo-200 transition-all cursor-pointer"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>พิมพ์ใบเสร็จรวมทั้งโต๊ะ ({selectedTableOrders.orders.reduce((sum, o) => sum + o.grandTotal, 0)} ฿)</span>
+                </button>
+              </div>
+            )}
 
             <div className="p-4 overflow-y-auto space-y-3 flex-1">
               {selectedTableOrders.orders.length === 0 ? (

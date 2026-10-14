@@ -165,8 +165,8 @@ export const App: React.FC = () => {
 
       {/* Global Modals */}
       <PaymentModal />
-      <ReceiptSlip />
       <TableStatusModal />
+      <ReceiptSlip />
     </div>
   )
 }

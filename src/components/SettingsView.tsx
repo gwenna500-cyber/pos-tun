@@ -15,7 +15,7 @@ import {
 } from 'lucide-react'
 import { usePosStore } from '../store/usePosStore'
 import { bluetoothPrinter } from '../lib/bluetoothPrinter'
-import { initFirebaseService, isFirebaseReady, syncPendingOrdersToFirebase } from '../lib/firebase'
+import { isFirebaseReady, syncPendingOrdersToFirebase } from '../lib/firebase'
 
 export const SettingsView: React.FC = () => {
   const { 
@@ -36,12 +36,7 @@ export const SettingsView: React.FC = () => {
     receiptFooter: shopSettings.receiptFooter,
     soundEnabled: shopSettings.soundEnabled,
     hapticEnabled: shopSettings.hapticEnabled,
-    autoPrintReceipt: shopSettings.autoPrintReceipt,
-    firebaseEnabled: shopSettings.firebaseEnabled,
-    apiKey: shopSettings.firebaseConfig.apiKey,
-    databaseURL: shopSettings.firebaseConfig.databaseURL,
-    projectId: shopSettings.firebaseConfig.projectId,
-    appId: shopSettings.firebaseConfig.appId
+    autoPrintReceipt: shopSettings.autoPrintReceipt
   })
 
   const [savedSuccess, setSavedSuccess] = useState(false)
@@ -52,6 +47,7 @@ export const SettingsView: React.FC = () => {
   // Save Settings
   const handleSave = () => {
     const updated = {
+      ...shopSettings,
       shopName: formData.shopName,
       branchName: formData.branchName,
       promptpayPhone: formData.promptpayPhone,
@@ -60,24 +56,10 @@ export const SettingsView: React.FC = () => {
       receiptFooter: formData.receiptFooter,
       soundEnabled: formData.soundEnabled,
       hapticEnabled: formData.hapticEnabled,
-      autoPrintReceipt: formData.autoPrintReceipt,
-      firebaseEnabled: formData.firebaseEnabled,
-      firebaseConfig: {
-        ...shopSettings.firebaseConfig,
-        apiKey: formData.apiKey,
-        databaseURL: formData.databaseURL,
-        projectId: formData.projectId,
-        appId: formData.appId
-      }
+      autoPrintReceipt: formData.autoPrintReceipt
     }
 
     setShopSettings(updated)
-
-    // Try re-initializing Firebase
-    if (formData.apiKey && formData.databaseURL && formData.projectId) {
-      initFirebaseService(updated.firebaseConfig)
-    }
-
     setSavedSuccess(true)
     setTimeout(() => setSavedSuccess(false), 2500)
   }
@@ -298,70 +280,57 @@ export const SettingsView: React.FC = () => {
           </div>
         </div>
 
-        {/* Section 3: Firebase Realtime Database */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs space-y-3.5">
-          <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-            <div className="flex items-center gap-2">
-              <Database className="w-5 h-5 text-amber-500" />
-              <h2 className="font-black text-slate-900 text-base">Firebase Realtime Sync</h2>
-            </div>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-              isFirebaseReady() ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'
-            }`}>
-              {isFirebaseReady() ? 'พร้อมใช้งาน' : 'โหมด Dexie ในเครื่อง'}
-            </span>
-          </div>
-
-          <p className="text-xs text-slate-500 leading-relaxed">
-            เชื่อมต่อกับ Firebase Realtime Database เพื่อให้ออเดอร์จากหน้าแคชเชียร์อัปเดตไปยังจอครัว (KDS) แบบ Realtime ข้ามเครื่องพร้อมกัน
-          </p>
-
-          <div className="space-y-2">
-            <div>
-              <label className="block text-[11px] font-bold text-slate-600 mb-0.5">Firebase API Key</label>
-              <input
-                type="text"
-                value={formData.apiKey}
-                onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })}
-                placeholder="AIzaSy..."
-                className="w-full h-9 px-2.5 text-xs font-mono bg-slate-50 border border-slate-200 rounded-lg focus:ring-1 focus:ring-red-500"
-              />
+        {/* Section 3: Cloud Realtime Sync Status */}
+        <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs space-y-3.5 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <Database className="w-5 h-5 text-amber-500" />
+                <h2 className="font-black text-slate-900 text-base">ระบบซิงก์ข้อมูลคลาวด์</h2>
+              </div>
+              <span className={`px-2.5 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 ${
+                isFirebaseReady() ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+              }`}>
+                <span className={`w-2 h-2 rounded-full ${isFirebaseReady() ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+                {isFirebaseReady() ? 'เชื่อมต่อคลาวด์สำเร็จ' : 'โหมดบันทึกในเครื่อง (Offline)'}
+              </span>
             </div>
 
-            <div>
-              <label className="block text-[11px] font-bold text-slate-600 mb-0.5">Database URL (Realtime DB)</label>
-              <input
-                type="text"
-                value={formData.databaseURL}
-                onChange={(e) => setFormData({ ...formData, databaseURL: e.target.value })}
-                placeholder="https://your-app-default-rtdb.firebaseio.com"
-                className="w-full h-9 px-2.5 text-xs font-mono bg-slate-50 border border-slate-200 rounded-lg focus:ring-1 focus:ring-red-500"
-              />
-            </div>
+            <p className="mt-3 text-xs text-slate-500 leading-relaxed">
+              ระบบเชื่อมต่อฐานข้อมูลคลาวด์อัตโนมัติ เพื่อส่งรายการออเดอร์จากหน้าแคชเชียร์ไปยังจอครัว (Kitchen View) และเครื่องอื่น ๆ แบบเรียลไทม์ทันที
+            </p>
 
-            <div>
-              <label className="block text-[11px] font-bold text-slate-600 mb-0.5">Project ID</label>
-              <input
-                type="text"
-                value={formData.projectId}
-                onChange={(e) => setFormData({ ...formData, projectId: e.target.value })}
-                placeholder="pos-tun-mala"
-                className="w-full h-9 px-2.5 text-xs font-mono bg-slate-50 border border-slate-200 rounded-lg focus:ring-1 focus:ring-red-500"
-              />
+            <div className="mt-4 p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-600 font-medium">สถานะอินเทอร์เน็ต:</span>
+                <span className={`font-bold ${isOnline ? 'text-emerald-600' : 'text-rose-600'}`}>
+                  {isOnline ? '🟢 ออนไลน์ (Online)' : '🔴 ออฟไลน์ (Offline)'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-600 font-medium">รายการค้างส่งขึ้นคลาวด์:</span>
+                <span className="font-bold text-slate-800">
+                  {pendingSyncCount > 0 ? (
+                    <span className="text-amber-600 font-black">{pendingSyncCount} รายการ</span>
+                  ) : (
+                    <span className="text-emerald-600">ข้อมูลเป็นปัจจุบัน (0 รายการ)</span>
+                  )}
+                </span>
+              </div>
             </div>
           </div>
 
-          <div className="pt-2 flex items-center justify-between text-xs">
-            <span className="text-slate-500">
-              ออเดอร์รอซิงก์: <strong className="text-amber-600">{pendingSyncCount}</strong> รายการ
+          <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+            <span className="text-slate-400 text-[11px]">
+              ซิงก์อัตโนมัติเมื่อมีการสั่งอาหาร
             </span>
             <button
               onClick={handleManualSync}
               disabled={syncLoading || !isOnline}
-              className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs flex items-center gap-1 transition-colors disabled:opacity-50"
+              className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs flex items-center gap-1.5 transition-colors disabled:opacity-50 cursor-pointer shadow-xs"
             >
-              <UploadCloud className="w-3.5 h-3.5" />
-              <span>ซิงก์ขึ้น Firebase ทันที</span>
+              <UploadCloud className="w-4 h-4" />
+              <span>{syncLoading ? 'กำลังซิงก์...' : 'กดซิงก์ข้อมูลทันที'}</span>
             </button>
           </div>
         </div>

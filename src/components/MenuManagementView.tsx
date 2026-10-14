@@ -375,8 +375,8 @@ export const MenuManagementView: React.FC = () => {
                       <h3 className="font-bold text-slate-900 text-sm leading-snug line-clamp-2">
                         {item.name}
                       </h3>
-                      <div className="font-black text-red-600 text-base flex-shrink-0">
-                        {item.price} ฿
+                      <div className="font-black text-slate-900 text-base flex-shrink-0 tracking-tight">
+                        {item.price} <span className="text-xs font-semibold text-slate-500">฿</span>
                       </div>
                     </div>
 
@@ -617,7 +617,7 @@ export const MenuManagementView: React.FC = () => {
                     required
                     value={menuForm.price}
                     onChange={(e) => setMenuForm({ ...menuForm, price: Number(e.target.value) })}
-                    className="w-full h-10 px-3 text-xs font-bold text-red-600 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-red-500"
+                    className="w-full h-10 px-3 text-xs font-bold text-slate-900 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-red-500"
                   />
                 </div>
 

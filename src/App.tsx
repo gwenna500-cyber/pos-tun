@@ -120,8 +120,8 @@ export const App: React.FC = () => {
                   <div className="text-xs text-slate-500 font-bold">
                     {totalCartCount > 0 ? `${totalCartCount} ไม้` : 'ยังไม่มีรายการ'}
                   </div>
-                  <div className="text-xl font-black text-red-600 leading-none">
-                    {grandTotal} <span className="text-xs font-bold text-slate-700">฿</span>
+                  <div className="text-xl font-black text-slate-900 leading-none">
+                    {grandTotal} <span className="text-xs font-bold text-slate-600">฿</span>
                   </div>
                 </div>
               </div>

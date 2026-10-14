@@ -137,11 +137,11 @@ export const MenuCatalog: React.FC = () => {
               <div>
                 {/* Header: Category Badge & Price */}
                 <div className="flex items-center justify-between gap-1 mb-1.5">
-                  <span className="inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-50 text-red-700 border border-red-100">
+                  <span className="inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
                     {getCategoryName(item.category)}
                   </span>
-                  <span className="font-black text-lg text-red-600">
-                    {item.price} <span className="text-xs font-bold text-slate-600">฿</span>
+                  <span className="font-black text-lg text-slate-900 tracking-tight">
+                    {item.price} <span className="text-xs font-semibold text-slate-500">฿</span>
                   </span>
                 </div>
 
@@ -208,8 +208,8 @@ export const MenuCatalog: React.FC = () => {
                 </h3>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-xl font-black text-red-600">
-                  {activeItem.price * itemQty} ฿
+                <span className="text-xl font-black text-slate-900 tracking-tight">
+                  {activeItem.price * itemQty} <span className="text-sm font-semibold text-slate-500">฿</span>
                 </span>
                 <button
                   onClick={() => setActiveItem(null)}

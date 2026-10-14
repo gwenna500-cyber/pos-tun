@@ -211,7 +211,7 @@ export const CartPanel: React.FC<CartPanelProps> = ({ isMobileDrawer = false }) 
           )}
           <div className="flex justify-between text-base font-black text-slate-900 pt-1 border-t border-slate-200">
             <span>ยอดสุทธิ:</span>
-            <span className="text-red-600 text-xl">{grandTotal} ฿</span>
+            <span className="text-slate-900 text-xl font-black">{grandTotal} <span className="text-sm font-bold text-slate-500">฿</span></span>
           </div>
         </div>
 

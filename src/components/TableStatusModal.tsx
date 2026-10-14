@@ -13,11 +13,13 @@ import {
   Lock,
   Flame,
   Edit3,
-  Trash2
+  Trash2,
+  Copy
 } from 'lucide-react'
 import { usePosStore } from '../store/usePosStore'
 import { db } from '../lib/db'
 import { SPICY_LEVELS } from '../lib/constants'
+import { generatePromptPayQrDataUrl } from '../lib/promptpay'
 import type { Order, PaymentMethod, CartItem } from '../types'
 import { EditOrderModal } from './EditOrderModal'
 
@@ -38,6 +40,9 @@ export const TableStatusModal: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'all' | 'occupied' | 'billed' | 'available'>('all')
   const [selectedTableForBilling, setSelectedTableForBilling] = useState<string | null>(null)
   const [billingPaymentMethod, setBillingPaymentMethod] = useState<PaymentMethod>('cash')
+  const [billingQrUrl, setBillingQrUrl] = useState<string>('')
+  const [copiedPromptPay, setCopiedPromptPay] = useState(false)
+  const [cashReceived, setCashReceived] = useState<string>('')
   const [isPaymentMethodLocked, setIsPaymentMethodLocked] = useState(true)
   const [isProcessing, setIsProcessing] = useState(false)
   const [editingOrderForTable, setEditingOrderForTable] = useState<Order | null>(null)
@@ -137,8 +142,24 @@ export const TableStatusModal: React.FC = () => {
     const chosenMethod = session?.paymentMethod || activeOrders.find(o => o.paymentMethod)?.paymentMethod || 'cash'
     setBillingPaymentMethod(chosenMethod)
     setIsPaymentMethodLocked(true)
+    setCashReceived('')
     setSelectedTableForBilling(tableName)
   }
+
+  // Generate PromptPay QR Data URL for table billing
+  useEffect(() => {
+    if (selectedTableForBilling && billingPaymentMethod === 'promptpay') {
+      const activeOrders = getActiveOrdersForTable(selectedTableForBilling)
+      const session = tableSessions[selectedTableForBilling]
+      const totalAmount = activeOrders.reduce((sum, o) => sum + o.grandTotal, 0) || (session?.totalAmount || 0)
+      const phone = shopSettings.promptpayPhone || '0812345678'
+      generatePromptPayQrDataUrl(phone, totalAmount).then(url => {
+        setBillingQrUrl(url)
+      })
+    } else {
+      setBillingQrUrl('')
+    }
+  }, [selectedTableForBilling, billingPaymentMethod, tableSessions, allRecentOrders, shopSettings.promptpayPhone])
 
   const handlePrintCombinedTableReceipt = (tableName: string, orders: Order[]) => {
     if (!orders || orders.length === 0) return
@@ -546,7 +567,7 @@ export const TableStatusModal: React.FC = () => {
       {/* --- Check Bill Confirmation Sub-Modal --- */}
       {selectedTableForBilling && (
         <div className="fixed inset-0 z-60 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded-3xl max-w-md w-full p-5 shadow-2xl border border-slate-200 space-y-4">
+          <div className="bg-white rounded-3xl max-w-md w-full max-h-[92vh] overflow-y-auto p-5 shadow-2xl border border-slate-200 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
                 <div className="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center">
@@ -627,6 +648,7 @@ export const TableStatusModal: React.FC = () => {
             {(() => {
               const activeOrders = getActiveOrdersForTable(selectedTableForBilling)
               const session = tableSessions[selectedTableForBilling]
+              const totalAmount = activeOrders.reduce((sum, o) => sum + o.grandTotal, 0) || (session?.totalAmount || 0)
               const customerChosenMethod = session?.paymentMethod || activeOrders.find(o => o.paymentMethod)?.paymentMethod
               const isLocked = isPaymentMethodLocked && !!customerChosenMethod
 
@@ -727,6 +749,119 @@ export const TableStatusModal: React.FC = () => {
                       <span>
                         ล็อกตามที่ลูกค้าเลือกจากหน้าสั่งอาหาร ({customerChosenMethod === 'promptpay' ? 'พร้อมเพย์ QR' : 'เงินสด / เช็คบิลหน้าร้าน'}) ไม่ต้องกดซ้ำซ้อน
                       </span>
+                    </div>
+                  )}
+
+                  {/* PROMPTPAY QR DISPLAY */}
+                  {billingPaymentMethod === 'promptpay' && (
+                    <div className="mt-3 bg-gradient-to-b from-blue-50/90 to-slate-50 border border-blue-200 rounded-2xl p-4 text-center space-y-3 animate-fade-in shadow-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black text-blue-900 flex items-center gap-1.5">
+                          <QrCode className="w-4 h-4 text-blue-600" />
+                          <span>สแกนพร้อมเพย์ QR ชำระค่าอาหาร</span>
+                        </span>
+                        <span className="text-xs font-black px-2.5 py-0.5 rounded-full bg-blue-600 text-white shadow-2xs">
+                          {totalAmount} ฿
+                        </span>
+                      </div>
+
+                      <div className="inline-block bg-white p-3 rounded-2xl border border-blue-200 shadow-md">
+                        {billingQrUrl ? (
+                          <img
+                            src={billingQrUrl}
+                            alt="PromptPay QR Code"
+                            className="w-48 h-48 sm:w-52 sm:h-52 mx-auto object-contain"
+                          />
+                        ) : (
+                          <div className="w-48 h-48 sm:w-52 sm:h-52 flex flex-col items-center justify-center text-slate-400 text-xs">
+                            <QrCode className="w-8 h-8 animate-pulse text-blue-400 mb-2" />
+                            <span>กำลังสร้าง QR Code...</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="p-2.5 bg-white rounded-xl border border-blue-100 flex items-center justify-between text-xs">
+                        <div className="text-left">
+                          <span className="text-[11px] text-slate-500 block">เบอร์พร้อมเพย์:</span>
+                          <span className="font-black text-slate-900 text-sm">
+                            {shopSettings.promptpayPhone || '0812345678'}
+                          </span>
+                          <span className="text-[10px] text-slate-400 block">
+                            {shopSettings.shopName || 'ร้านหม่าล่าทอด ตุ่นฟินเว่อร์'}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const phone = shopSettings.promptpayPhone || '0812345678'
+                            navigator.clipboard.writeText(phone)
+                            setCopiedPromptPay(true)
+                            setTimeout(() => setCopiedPromptPay(false), 2000)
+                          }}
+                          className="py-1.5 px-3 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs flex items-center gap-1 transition-colors cursor-pointer"
+                        >
+                          {copiedPromptPay ? (
+                            <>
+                              <Check className="w-3.5 h-3.5 text-emerald-600" />
+                              <span className="text-emerald-700 font-bold">คัดลอกแล้ว</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3.5 h-3.5" />
+                              <span>คัดลอกเบอร์</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+
+                      <p className="text-[11px] text-slate-500">
+                        * ลูกค้าเปิดแอปธนาคารแล้วสแกน QR นี้ ยอดเงิน <strong>{totalAmount} ฿</strong> จะขึ้นให้อัตโนมัติทันที
+                      </p>
+                    </div>
+                  )}
+
+                  {/* CASH CALCULATOR DISPLAY */}
+                  {billingPaymentMethod === 'cash' && (
+                    <div className="mt-3 bg-slate-50 border border-slate-200 rounded-2xl p-3.5 space-y-2.5 animate-fade-in text-xs">
+                      <div className="flex items-center justify-between">
+                        <label className="font-bold text-slate-700 flex items-center gap-1">
+                          <Banknote className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>รับเงินสดมา (บาท):</span>
+                        </label>
+                        {parseFloat(cashReceived) > 0 && (
+                          <span className="font-black text-emerald-700">
+                            เงินทอน: {Math.max(0, parseFloat(cashReceived) - totalAmount)} ฿
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        <input
+                          type="number"
+                          value={cashReceived}
+                          onChange={(e) => setCashReceived(e.target.value)}
+                          placeholder={`ขั้นต่ำ ${totalAmount}`}
+                          className="flex-1 h-10 px-3 text-base font-black text-slate-900 bg-white border border-slate-300 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setCashReceived(String(totalAmount))}
+                          className="px-3 rounded-xl bg-emerald-100 hover:bg-emerald-200 text-emerald-800 font-bold text-xs border border-emerald-300 transition-colors cursor-pointer"
+                        >
+                          พอดี
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-4 gap-1.5 pt-0.5">
+                        {[50, 100, 500, 1000].map((note) => (
+                          <button
+                            key={note}
+                            type="button"
+                            onClick={() => setCashReceived(String(note))}
+                            className="py-1.5 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-lg border border-slate-200 shadow-2xs cursor-pointer"
+                          >
+                            {note} ฿
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>

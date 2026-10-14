@@ -18,7 +18,8 @@ import {
   Lock,
   Sparkles,
   Receipt,
-  ChefHat
+  ChefHat,
+  Copy
 } from 'lucide-react'
 import confetti from 'canvas-confetti'
 import { usePosStore } from '../store/usePosStore'
@@ -107,6 +108,9 @@ export const LineTakeawayOrderView: React.FC = () => {
   // Order Success Screen
   const [completedOrder, setCompletedOrder] = useState<Order | null>(null)
   const [promptPayQrUrl, setPromptPayQrUrl] = useState<string>('')
+  const [tableBilledQrUrl, setTableBilledQrUrl] = useState<string>('')
+  const [showHistoryQr, setShowHistoryQr] = useState<boolean>(false)
+  const [copiedPromptPay, setCopiedPromptPay] = useState(false)
 
   // Orders history for this table / customer
   const [tableOrders, setTableOrders] = useState<Order[]>([])
@@ -186,8 +190,18 @@ export const LineTakeawayOrderView: React.FC = () => {
   }, [tableOrders])
 
   const totalTableOrderedAmount = useMemo(() => {
-    return tableOrders.reduce((sum, o) => sum + o.grandTotal, 0)
-  }, [tableOrders])
+    return tableOrders.reduce((sum, o) => sum + o.grandTotal, 0) || (currentTableSession?.totalAmount || 0)
+  }, [tableOrders, currentTableSession?.totalAmount])
+
+  // Generate PromptPay QR for billed table or history drawer
+  useEffect(() => {
+    if (totalTableOrderedAmount > 0) {
+      const phone = shopSettings.promptpayPhone || '0812345678'
+      generatePromptPayQrDataUrl(phone, totalTableOrderedAmount).then(url => {
+        setTableBilledQrUrl(url)
+      })
+    }
+  }, [totalTableOrderedAmount, shopSettings.promptpayPhone])
 
   // Filtered menu
   const filteredItems = useMemo(() => {
@@ -344,8 +358,9 @@ export const LineTakeawayOrderView: React.FC = () => {
       }
 
       // Generate promptpay QR if promptpay selected
-      if (paymentMethod === 'promptpay' && shopSettings.promptpayPhone) {
-        generatePromptPayQrDataUrl(shopSettings.promptpayPhone, order.grandTotal).then(setPromptPayQrUrl)
+      if (paymentMethod === 'promptpay') {
+        const phone = shopSettings.promptpayPhone || '0812345678'
+        generatePromptPayQrDataUrl(phone, order.grandTotal).then(setPromptPayQrUrl)
       }
 
       setCompletedOrder(order)
@@ -446,9 +461,24 @@ export const LineTakeawayOrderView: React.FC = () => {
                   กำลังสร้าง QR...
                 </div>
               )}
-              <p className="text-[11px] text-slate-500">
-                พร้อมเพย์: <strong className="text-slate-800">{shopSettings.promptpayPhone}</strong> ({shopSettings.shopName})
-              </p>
+              <div className="flex items-center justify-center gap-1.5 text-xs text-slate-600">
+                <span>พร้อมเพย์:</span>
+                <strong className="text-slate-800">{shopSettings.promptpayPhone || '0812345678'}</strong>
+                <span className="text-slate-400 text-[11px]">({shopSettings.shopName || 'ร้านหม่าล่าทอด ตุ่นฟินเว่อร์'})</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const phone = shopSettings.promptpayPhone || '0812345678'
+                    navigator.clipboard.writeText(phone)
+                    setCopiedPromptPay(true)
+                    setTimeout(() => setCopiedPromptPay(false), 2000)
+                  }}
+                  className="p-1 hover:bg-slate-200 rounded text-slate-500 hover:text-slate-800 cursor-pointer"
+                  title="คัดลอกเบอร์"
+                >
+                  {copiedPromptPay ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                </button>
+              </div>
             </div>
           )}
 
@@ -823,6 +853,65 @@ export const LineTakeawayOrderView: React.FC = () => {
           <p className="text-xs sm:text-sm text-slate-500 mt-2 leading-relaxed">
             โต๊ะนี้ได้รับการเช็คบิลและปิดรอบการรับประทานแล้ว จึงไม่สามารถส่งออเดอร์เพิ่มจากอุปกรณ์เครื่องนี้ได้อีก เพื่อป้องกันการสั่งอาหารซ้ำซ้อนหรือสั่งจากที่อื่น
           </p>
+
+          {/* PromptPay QR for Billed Table */}
+          {totalTableOrderedAmount > 0 && (
+            <div className="mt-4 bg-white rounded-2xl p-4 border border-blue-200 text-center space-y-3 w-full shadow-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-blue-900 flex items-center gap-1.5">
+                  <QrCode className="w-4 h-4 text-blue-600" />
+                  <span>สแกนพร้อมเพย์ QR เช็คบิล</span>
+                </span>
+                <span className="text-xs font-black px-2.5 py-0.5 rounded-full bg-blue-600 text-white shadow-2xs">
+                  {totalTableOrderedAmount} ฿
+                </span>
+              </div>
+
+              <div className="inline-block bg-white p-2.5 rounded-2xl border border-blue-200 shadow-sm">
+                {tableBilledQrUrl ? (
+                  <img src={tableBilledQrUrl} alt="PromptPay QR" className="w-48 h-48 mx-auto object-contain" />
+                ) : (
+                  <div className="w-48 h-48 flex items-center justify-center text-xs text-slate-400">
+                    กำลังสร้าง QR Code...
+                  </div>
+                )}
+              </div>
+
+              <div className="p-2 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between text-xs">
+                <div className="text-left">
+                  <span className="text-[10px] text-slate-500 block">เบอร์พร้อมเพย์:</span>
+                  <span className="font-bold text-slate-900">{shopSettings.promptpayPhone || '0812345678'}</span>
+                  <span className="text-[10px] text-slate-400 block">{shopSettings.shopName || 'ร้านหม่าล่าทอด ตุ่นฟินเว่อร์'}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const phone = shopSettings.promptpayPhone || '0812345678'
+                    navigator.clipboard.writeText(phone)
+                    setCopiedPromptPay(true)
+                    setTimeout(() => setCopiedPromptPay(false), 2000)
+                  }}
+                  className="py-1 px-2.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-[11px] flex items-center gap-1 cursor-pointer transition-colors"
+                >
+                  {copiedPromptPay ? (
+                    <>
+                      <Check className="w-3 h-3 text-emerald-600" />
+                      <span className="text-emerald-700">คัดลอกแล้ว</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>คัดลอกเบอร์</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              <p className="text-[11px] text-slate-500">
+                สแกนได้จากทุกแอปธนาคาร ยอดเงิน <strong>{totalTableOrderedAmount} ฿</strong> จะขึ้นให้อัตโนมัติทันที
+              </p>
+            </div>
+          )}
 
           <div className="mt-5 p-4 bg-white rounded-2xl border border-slate-200 text-xs text-slate-600 space-y-2 text-left w-full shadow-xs">
             <div className="font-bold text-slate-900 flex items-center gap-1.5">
@@ -1539,14 +1628,60 @@ export const LineTakeawayOrderView: React.FC = () => {
                 </div>
               </div>
               <div className="text-right text-[11px] text-emerald-800">
-                <span className="px-2.5 py-1 rounded-lg bg-white border border-emerald-300 font-bold shadow-2xs inline-block">
-                  {diningType === 'dine_in' ? '💳 ชำระเมื่อทานเสร็จ' : '🥡 ออเดอร์กลับบ้าน'}
-                </span>
+                {totalTableOrderedAmount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowHistoryQr(prev => !prev)}
+                    className="px-2.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1 shadow-sm transition-all cursor-pointer"
+                  >
+                    <QrCode className="w-3.5 h-3.5" />
+                    <span>{showHistoryQr ? 'ซ่อน QR ชำระเงิน' : 'สแกน QR จ่ายเงิน'}</span>
+                  </button>
+                )}
                 <span className="block text-[10px] text-slate-400 mt-1">
                   (อัปเดตสถานะแบบ Real-time)
                 </span>
               </div>
             </div>
+
+            {/* PromptPay QR Toggle Inside History */}
+            {showHistoryQr && totalTableOrderedAmount > 0 && (
+              <div className="p-4 bg-blue-50/80 border-b border-blue-200 text-center space-y-2.5 animate-fade-in">
+                <span className="text-xs font-bold text-blue-900 block">
+                  สแกนชำระเงินผ่านพร้อมเพย์ ({totalTableOrderedAmount} ฿)
+                </span>
+                <div className="inline-block bg-white p-2.5 rounded-2xl border border-blue-200 shadow-sm">
+                  {tableBilledQrUrl ? (
+                    <img src={tableBilledQrUrl} alt="PromptPay QR" className="w-44 h-44 mx-auto object-contain" />
+                  ) : (
+                    <div className="w-44 h-44 flex items-center justify-center text-xs text-slate-400">
+                      กำลังสร้าง QR...
+                    </div>
+                  )}
+                </div>
+                <div className="text-xs text-slate-600 flex items-center justify-center gap-1.5">
+                  <span>พร้อมเพย์:</span>
+                  <span className="font-bold text-slate-900">{shopSettings.promptpayPhone || '0812345678'}</span>
+                  <span className="text-[10px] text-slate-400">({shopSettings.shopName || 'ร้านหม่าล่าทอด ตุ่นฟินเว่อร์'})</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const phone = shopSettings.promptpayPhone || '0812345678'
+                      navigator.clipboard.writeText(phone)
+                      setCopiedPromptPay(true)
+                      setTimeout(() => setCopiedPromptPay(false), 2000)
+                    }}
+                    className="p-1 hover:bg-blue-100 rounded text-blue-600 cursor-pointer"
+                    title="คัดลอกเบอร์"
+                  >
+                    {copiedPromptPay ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  สแกนได้จากทุกแอปธนาคาร ยอดเงิน {totalTableOrderedAmount} ฿ จะขึ้นให้อัตโนมัติทันที
+                </p>
+              </div>
+            )}
 
             {/* Orders List */}
             <div className="p-4 overflow-y-auto space-y-3.5 flex-1 text-slate-800">

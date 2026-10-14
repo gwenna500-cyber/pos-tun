@@ -62,8 +62,7 @@ export const COOKING_METHODS: { id: CookingMethod; label: string; icon: string; 
 
 export const DINING_TYPES: { id: DiningType; label: string }[] = [
   { id: 'takeaway', label: 'รับกลับบ้าน' },
-  { id: 'dine_in', label: 'ทานที่ร้าน' },
-  { id: 'delivery', label: 'เดลิเวอรี่' }
+  { id: 'dine_in', label: 'ทานที่ร้าน' }
 ]
 
 export const DEFAULT_SHOP_SETTINGS: ShopSettings = {

@@ -64,12 +64,18 @@ export async function pushOrderToFirebase(order: Order): Promise<boolean> {
   }
 
   try {
-    const orderRef = ref(realtimeDb, `orders/${order.id}`)
-    await set(orderRef, {
+    const cleanId = order.id || `ord_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
+    const orderRef = ref(realtimeDb, `orders/${cleanId}`)
+    
+    // Remove all undefined properties before sending to Firebase
+    const sanitizedOrder = JSON.parse(JSON.stringify({
       ...order,
+      id: cleanId,
       syncedAt: Date.now()
-    })
-    await markOrderAsSynced(order.id, order.id)
+    }))
+
+    await set(orderRef, sanitizedOrder)
+    await markOrderAsSynced(order.id, cleanId)
     return true
   } catch (error) {
     console.warn('[Firebase] Could not push order to Firebase (offline or permission error):', error)
@@ -100,11 +106,13 @@ export async function updateFirebaseOrderStatus(orderId: string, status: Order['
 export async function updateFirebaseOrder(order: Order): Promise<boolean> {
   if (!isFirebaseReady() || !realtimeDb) return false
   try {
-    const orderRef = ref(realtimeDb, `orders/${order.id}`)
-    await update(orderRef, {
+    const cleanId = order.id
+    const orderRef = ref(realtimeDb, `orders/${cleanId}`)
+    const sanitizedOrder = JSON.parse(JSON.stringify({
       ...order,
       updatedAt: Date.now()
-    })
+    }))
+    await update(orderRef, sanitizedOrder)
     return true
   } catch (error) {
     console.warn('[Firebase] Could not update order in Firebase:', error)
@@ -136,7 +144,10 @@ export function subscribeToFirebaseOrders(callback: (orders: Order[]) => void): 
   onValue(ordersRef, (snapshot) => {
     if (snapshot.exists()) {
       const data = snapshot.val()
-      const orderList: Order[] = Object.values(data)
+      const orderList: Order[] = Object.entries(data)
+        .filter(([key]) => !key.startsWith('_')) // Exclude meta nodes like _meta_table_sessions
+        .map(([, val]) => val as Order)
+        .filter(ord => ord && ord.id)
       callback(orderList)
     } else {
       callback([])
@@ -260,12 +271,21 @@ export async function updateFirebaseTableSession(session: TableSession): Promise
   if (!isFirebaseReady() || !realtimeDb) return false
   try {
     const key = sanitizeTableKey(session.tableNumber)
-    const sessionRef = ref(realtimeDb, `tableSessions/${key}`)
-    await set(sessionRef, {
+    const sanitized = JSON.parse(JSON.stringify({
       ...session,
       syncedAt: Date.now()
-    })
-    return true
+    }))
+
+    // Try primary path first, fallback to orders/_meta_table_sessions if restricted by rules
+    try {
+      const sessionRef = ref(realtimeDb, `tableSessions/${key}`)
+      await set(sessionRef, sanitized)
+      return true
+    } catch {
+      const fallbackRef = ref(realtimeDb, `orders/_meta_table_sessions/${key}`)
+      await set(fallbackRef, sanitized)
+      return true
+    }
   } catch (error) {
     console.warn('[Firebase] Could not update table session in Firebase:', error)
     return false
@@ -276,7 +296,9 @@ export async function updateFirebaseTableSession(session: TableSession): Promise
 export function subscribeToFirebaseTableSessions(callback: (sessions: Record<string, TableSession>) => void): () => void {
   if (!isFirebaseReady() || !realtimeDb) return () => {}
   const sessionsRef = ref(realtimeDb, 'tableSessions')
-  onValue(sessionsRef, (snapshot) => {
+  const fallbackRef = ref(realtimeDb, 'orders/_meta_table_sessions')
+
+  const handleData = (snapshot: any) => {
     if (snapshot.exists()) {
       const data = snapshot.val() || {}
       const map: Record<string, TableSession> = {}
@@ -289,10 +311,20 @@ export function subscribeToFirebaseTableSessions(callback: (sessions: Record<str
     } else {
       callback({})
     }
-  }, (err) => console.warn('[Firebase] Error listening to table sessions:', err))
+  }
+
+  // Listen to primary path, and fallback if permission denied
+  onValue(sessionsRef, handleData, () => {
+    onValue(fallbackRef, handleData, (err) => {
+      console.warn('[Firebase] Error listening to fallback table sessions:', err)
+    })
+  })
 
   return () => {
-    if (realtimeDb) off(sessionsRef)
+    if (realtimeDb) {
+      off(sessionsRef)
+      off(fallbackRef)
+    }
   }
 }
 

@@ -14,7 +14,7 @@ import { usePosStore } from './store/usePosStore'
 import { initializeDatabase, db, saveTableSessionsToDb } from './lib/db'
 import { isFirebaseReady, initFirebaseService, subscribeToFirebaseOrders, updateFirebaseTableSession } from './lib/firebase'
 import { DEFAULT_SHOP_SETTINGS } from './lib/constants'
-import type { TableSession } from './types'
+import type { TableSession, Order } from './types'
 import { ShoppingBag, ArrowRight } from 'lucide-react'
 
 export const App: React.FC = () => {
@@ -68,7 +68,12 @@ export const App: React.FC = () => {
           if (cloudOrders && cloudOrders.length > 0) {
             for (const ord of cloudOrders) {
               try {
-                await db.orders.put(ord)
+                if (!ord) continue
+                const validOrder: Order = {
+                  ...ord,
+                  id: ord.id || (ord as any).orderId || (ord as any).firebaseId || `ord_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
+                }
+                await db.orders.put(validOrder)
 
                 // If this order is for a table, auto-open table as occupied if currently available
                 if (ord.isTableQrOrder && ord.tableNumber && ord.status !== 'cancelled' && ord.status !== 'completed') {

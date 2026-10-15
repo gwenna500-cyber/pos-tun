@@ -115,8 +115,6 @@ export const TableStatusModal: React.FC = () => {
     }
   }, [isTableStatusModalOpen])
 
-  if (!isTableStatusModalOpen) return null
-
   const tableList = shopSettings.tableList && shopSettings.tableList.length > 0
     ? shopSettings.tableList
     : Array.from({ length: shopSettings.tableCount || 10 }, (_, i) => `โต๊ะ ${i + 1}`)
@@ -308,6 +306,8 @@ export const TableStatusModal: React.FC = () => {
     return `${hours} ชม. ${mins} นาทีที่แล้ว`
   }
 
+  if (!isTableStatusModalOpen) return null
+
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-fade-in">
       <div className="bg-white rounded-3xl max-w-4xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
@@ -485,7 +485,7 @@ export const TableStatusModal: React.FC = () => {
                         <div className="flex items-center gap-1.5 text-[11px] pt-0.5 flex-wrap">
                           <span className="text-slate-500">ความเผ็ด:</span>
                           <span className="px-2 py-0.5 rounded-md bg-red-100 text-red-800 font-bold border border-red-200 text-[10px]">
-                            🔥 {spicyOptions.find(s => s.id === activeOrders[0].spicyLevel)?.label.split(' ')[0] || SPICY_LEVELS.find(s => s.id === activeOrders[0].spicyLevel)?.label.split(' ')[0] || activeOrders[0].spicyLevel}
+                            🔥 {(spicyOptions || []).find(s => s.id === activeOrders[0]?.spicyLevel)?.label?.split(' ')[0] || (SPICY_LEVELS || []).find(s => s.id === activeOrders[0]?.spicyLevel)?.label?.split(' ')[0] || String(activeOrders[0]?.spicyLevel)}
                           </span>
                           {activeOrders[0].orderAddons && activeOrders[0].orderAddons.length > 0 && (
                             <span className="px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-900 font-medium border border-amber-200 text-[10px]">

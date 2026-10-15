@@ -17,6 +17,12 @@
       body {
         font-family: 'Prompt', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       }
+      [data-netlify-deploy-id], #netlify-badge, .netlify-badge, iframe[src*="netlify"], div[class*="netlify"], div[id*="netlify"], a[href*="netlify.com"] {
+        display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+      }
     </style>
   </head>
   <body class="bg-slate-50 text-slate-800 antialiased overflow-x-hidden selection:bg-red-500 selection:text-white">

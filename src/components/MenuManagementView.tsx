@@ -12,11 +12,55 @@ import {
   ToggleLeft,
   ToggleRight,
   Eye,
-  AlertTriangle
+  AlertTriangle,
+  Image as ImageIcon,
+  Upload
 } from 'lucide-react'
 import { usePosStore } from '../store/usePosStore'
 import { MENU_CATEGORIES } from '../lib/constants'
 import type { MenuItem, SpicyOption } from '../types'
+
+// Client-side image compressor: scales down to max 480px and outputs ~30-50KB WebP/JPEG data URL
+const compressImageFile = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.readAsDataURL(file)
+    reader.onload = (event) => {
+      const img = new Image()
+      img.src = event.target?.result as string
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        let width = img.width
+        let height = img.height
+        const maxDim = 480
+        if (width > height && width > maxDim) {
+          height = Math.round((height * maxDim) / width)
+          width = maxDim
+        } else if (height > maxDim) {
+          width = Math.round((width * maxDim) / height)
+          height = maxDim
+        }
+        canvas.width = width
+        canvas.height = height
+        const ctx = canvas.getContext('2d')
+        if (!ctx) {
+          resolve(img.src)
+          return
+        }
+        ctx.drawImage(img, 0, 0, width, height)
+        try {
+          const dataUrl = canvas.toDataURL('image/webp', 0.8)
+          resolve(dataUrl)
+        } catch {
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.8)
+          resolve(dataUrl)
+        }
+      }
+      img.onerror = (err) => reject(err)
+    }
+    reader.onerror = (err) => reject(err)
+  })
+}
 
 // Color theme presets for spicy/modifier badges
 const BADGE_COLOR_PRESETS = [
@@ -57,11 +101,13 @@ export const MenuManagementView: React.FC = () => {
   // Menu Item Modal State
   const [isMenuModalOpen, setIsMenuModalOpen] = useState(false)
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null)
+  const [isCompressingImage, setIsCompressingImage] = useState(false)
   const [menuForm, setMenuForm] = useState({
     name: '',
     price: 20,
     category: 'meat_pork',
     description: '',
+    image: '',
     isAvailable: true
   })
 
@@ -97,6 +143,7 @@ export const MenuManagementView: React.FC = () => {
       price: 20,
       category: 'meat_pork',
       description: '',
+      image: '',
       isAvailable: true
     })
     setIsMenuModalOpen(true)
@@ -109,9 +156,25 @@ export const MenuManagementView: React.FC = () => {
       price: item.price,
       category: item.category,
       description: item.description || '',
+      image: item.image || '',
       isAvailable: item.isAvailable
     })
     setIsMenuModalOpen(true)
+  }
+
+  const handleImageFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    try {
+      setIsCompressingImage(true)
+      const compressedBase64 = await compressImageFile(file)
+      setMenuForm(prev => ({ ...prev, image: compressedBase64 }))
+    } catch (err) {
+      console.error('Failed to compress image:', err)
+      alert('ไม่สามารถประมวลผลไฟล์รูปภาพได้ กรุณาลองใหม่อีกครั้ง')
+    } finally {
+      setIsCompressingImage(false)
+    }
   }
 
   const handleSaveMenu = async (e: React.FormEvent) => {
@@ -121,22 +184,19 @@ export const MenuManagementView: React.FC = () => {
       return
     }
 
+    const payload = {
+      name: menuForm.name.trim(),
+      price: Number(menuForm.price) || 0,
+      category: menuForm.category,
+      description: menuForm.description.trim(),
+      image: menuForm.image ? menuForm.image.trim() : undefined,
+      isAvailable: menuForm.isAvailable
+    }
+
     if (editingItem) {
-      await updateMenuItemRecord(editingItem.id, {
-        name: menuForm.name.trim(),
-        price: Number(menuForm.price) || 0,
-        category: menuForm.category,
-        description: menuForm.description.trim(),
-        isAvailable: menuForm.isAvailable
-      })
+      await updateMenuItemRecord(editingItem.id, payload)
     } else {
-      await addMenuItemRecord({
-        name: menuForm.name.trim(),
-        price: Number(menuForm.price) || 0,
-        category: menuForm.category,
-        description: menuForm.description.trim(),
-        isAvailable: menuForm.isAvailable
-      })
+      await addMenuItemRecord(payload)
     }
 
     setIsMenuModalOpen(false)
@@ -346,11 +406,23 @@ export const MenuManagementView: React.FC = () => {
               return (
                 <div
                   key={item.id}
-                  className={`bg-white rounded-2xl p-4 border transition-all flex flex-col justify-between shadow-xs hover:shadow-md ${
+                  className={`bg-white rounded-2xl p-4 border transition-all flex flex-col justify-between shadow-xs hover:shadow-md overflow-hidden ${
                     isAvailable ? 'border-slate-200' : 'border-slate-200 opacity-60 bg-slate-50/70'
                   }`}
                 >
                   <div>
+                    {/* Item Image Thumbnail if available */}
+                    {item.image && (
+                      <div className="w-full h-32 -mx-4 -mt-4 mb-3 bg-slate-100 overflow-hidden flex items-center justify-center relative group">
+                        <img
+                          src={item.image}
+                          alt={item.name}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          loading="lazy"
+                        />
+                      </div>
+                    )}
+
                     {/* Category & Status Badge */}
                     <div className="flex items-center justify-between gap-1 mb-2">
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
@@ -648,6 +720,67 @@ export const MenuManagementView: React.FC = () => {
                   placeholder="เช่น ทอดกรอบสะเด็ดน้ำมัน หอมเครื่องเทศจีนแท้..."
                   className="w-full p-2.5 text-xs font-medium bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-red-500"
                 />
+              </div>
+
+              {/* Menu Image Upload & URL */}
+              <div className="space-y-2 p-3 bg-slate-50 rounded-2xl border border-slate-200">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-slate-800">
+                    รูปภาพอาหาร
+                  </label>
+                  {menuForm.image && (
+                    <button
+                      type="button"
+                      onClick={() => setMenuForm({ ...menuForm, image: '' })}
+                      className="text-[11px] font-bold text-rose-600 hover:text-rose-700 cursor-pointer flex items-center gap-1"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      <span>ลบรูปภาพ</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* Preview Image if selected */}
+                {menuForm.image ? (
+                  <div className="relative w-full h-36 rounded-xl overflow-hidden bg-slate-200 border border-slate-300 flex items-center justify-center shadow-inner">
+                    <img
+                      src={menuForm.image}
+                      alt="Preview"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                ) : (
+                  <div className="h-20 rounded-xl border border-dashed border-slate-300 flex flex-col items-center justify-center text-slate-400 bg-white text-xs gap-1">
+                    <ImageIcon className="w-6 h-6 text-slate-300" />
+                    <span>ยังไม่มีรูปภาพ (สามารถเลือกใส่หรือไม่ใส่ก็ได้)</span>
+                  </div>
+                )}
+
+                {/* Upload Button & Status */}
+                <div className="flex gap-2 items-center">
+                  <label className="flex-1 h-9 rounded-xl bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-colors shadow-2xs">
+                    <Upload className="w-3.5 h-3.5 text-red-600" />
+                    <span>{isCompressingImage ? 'กำลังประมวลผลรูป...' : 'อัปโหลดรูปจากเครื่อง'}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageFileUpload}
+                      className="hidden"
+                      disabled={isCompressingImage}
+                    />
+                  </label>
+                </div>
+
+                {/* Or enter Image URL */}
+                <div>
+                  <input
+                    type="url"
+                    value={menuForm.image}
+                    onChange={(e) => setMenuForm({ ...menuForm, image: e.target.value })}
+                    placeholder="หรือวางลิงก์รูปภาพ (https://...)"
+                    className="w-full h-8 px-2.5 text-[11px] font-medium bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-red-500"
+                  />
+                </div>
               </div>
 
               {/* In stock toggle */}

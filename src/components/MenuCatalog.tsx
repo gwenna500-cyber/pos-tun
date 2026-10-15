@@ -95,7 +95,7 @@ export const MenuCatalog: React.FC = () => {
             <div
               key={item.id}
               onClick={() => handleItemClick(item)}
-              className={`relative bg-white rounded-2xl p-3.5 border transition-all cursor-pointer flex flex-col justify-between active:scale-[0.98] group ${
+              className={`relative bg-white rounded-2xl p-3.5 border transition-all cursor-pointer flex flex-col justify-between active:scale-[0.98] group overflow-hidden ${
                 isAvailable 
                   ? 'border-slate-200/90 shadow-2xs hover:shadow-md hover:border-red-300' 
                   : 'border-slate-200 opacity-60 bg-slate-50'
@@ -107,6 +107,18 @@ export const MenuCatalog: React.FC = () => {
                 </div>
               )}
               <div>
+                {/* Item Image Thumbnail if available */}
+                {item.image && (
+                  <div className="w-full h-24 -mx-3.5 -mt-3.5 mb-2.5 bg-slate-100 overflow-hidden flex items-center justify-center relative">
+                    <img
+                      src={item.image}
+                      alt={item.name}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      loading="lazy"
+                    />
+                  </div>
+                )}
+
                 {/* Header: Category Badge & Price */}
                 <div className="flex items-center justify-between gap-1 mb-1.5">
                   <span className="inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">

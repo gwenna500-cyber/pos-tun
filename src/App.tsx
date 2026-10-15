@@ -11,9 +11,10 @@ import { ReceiptSlip } from './components/ReceiptSlip'
 import { LineTakeawayOrderView } from './components/LineTakeawayOrderView'
 import { TableStatusModal } from './components/TableStatusModal'
 import { usePosStore } from './store/usePosStore'
-import { initializeDatabase, db } from './lib/db'
-import { initFirebaseService } from './lib/firebase'
+import { initializeDatabase, db, saveTableSessionsToDb } from './lib/db'
+import { isFirebaseReady, initFirebaseService, subscribeToFirebaseOrders, updateFirebaseTableSession } from './lib/firebase'
 import { DEFAULT_SHOP_SETTINGS } from './lib/constants'
+import type { TableSession } from './types'
 import { ShoppingBag, ArrowRight } from 'lucide-react'
 
 export const App: React.FC = () => {
@@ -57,6 +58,50 @@ export const App: React.FC = () => {
       } catch (err) {
         console.error('Failed to load settings:', err)
         initFirebaseService(DEFAULT_SHOP_SETTINGS.firebaseConfig)
+      }
+
+      // Connect Firebase subscriptions for cross-device real-time sync
+      if (isFirebaseReady()) {
+        usePosStore.getState().loadTableSessions()
+
+        subscribeToFirebaseOrders(async (cloudOrders) => {
+          if (cloudOrders && cloudOrders.length > 0) {
+            for (const ord of cloudOrders) {
+              try {
+                await db.orders.put(ord)
+
+                // If this order is for a table, auto-open table as occupied if currently available
+                if (ord.isTableQrOrder && ord.tableNumber && ord.status !== 'cancelled' && ord.status !== 'completed') {
+                  const cleanT = ord.tableNumber.trim().startsWith('โต๊ะ') ? ord.tableNumber.trim() : `โต๊ะ ${ord.tableNumber.trim()}`
+                  const currentSession = usePosStore.getState().tableSessions[cleanT]
+                  if (!currentSession || currentSession.status === 'available') {
+                    const autoSession: TableSession = {
+                      tableNumber: cleanT,
+                      sessionId: ord.tableSessionId || `sess_${Date.now()}`,
+                      status: 'occupied',
+                      openedAt: ord.createdAt || Date.now(),
+                      orderCount: 1,
+                      totalAmount: ord.grandTotal || 0,
+                      lastOrderAt: ord.createdAt || Date.now(),
+                      customerName: ord.customerName,
+                      paymentMethod: ord.paymentMethod
+                    }
+                    const updatedSessions = {
+                      ...usePosStore.getState().tableSessions,
+                      [cleanT]: autoSession
+                    }
+                    usePosStore.setState({ tableSessions: updatedSessions })
+                    saveTableSessionsToDb(updatedSessions).catch(console.error)
+                    updateFirebaseTableSession(autoSession).catch(console.error)
+                  }
+                }
+              } catch (e) {
+                console.warn('Failed to cache cloud order locally:', e)
+              }
+            }
+            refreshSyncCount()
+          }
+        })
       }
 
       await refreshSyncCount()

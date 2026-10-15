@@ -8,7 +8,6 @@ import {
   Minus, 
   X, 
   Check, 
-  ArrowLeft, 
   QrCode, 
   Banknote, 
   Send, 
@@ -36,8 +35,7 @@ export const LineTakeawayOrderView: React.FC = () => {
     spicyOptions, 
     shopSettings, 
     tableSessions,
-    submitCustomerOrder,
-    setCurrentView 
+    submitCustomerOrder
   } = usePosStore()
 
   const lineSettings = shopSettings.lineOaSettings || DEFAULT_LINE_OA_SETTINGS
@@ -60,10 +58,9 @@ export const LineTakeawayOrderView: React.FC = () => {
     return { diningType: 'takeaway' as DiningType, table: 'โต๊ะ 1' }
   }, [])
 
-  // Order mode state: 'dine_in' (Table QR) or 'takeaway' (LINE takeaway)
-  const [diningType, setDiningType] = useState<DiningType>(initialParams.diningType)
-  const [tableNumber, setTableNumber] = useState<string>(initialParams.table)
-  const [isChangingTable, setIsChangingTable] = useState(false)
+  // Order mode: 'dine_in' (Table QR) or 'takeaway' (LINE takeaway)
+  const diningType = initialParams.diningType
+  const tableNumber = initialParams.table
 
   // Real-time table session status
   const cleanTableNumber = useMemo(() => {
@@ -673,101 +670,44 @@ export const LineTakeawayOrderView: React.FC = () => {
                 )}
               </div>
               <p className="text-[11px] text-slate-500 font-medium truncate">
-                {shopSettings.shopName} · {diningType === 'dine_in' ? 'สแกนสั่งที่โต๊ะอาหาร' : `LINE OA: ${lineSettings.lineOaId || '@tunfinver'}`}
+                {shopSettings.shopName} · {diningType === 'dine_in' ? `สแกนสั่งที่โต๊ะอาหาร (${tableNumber})` : `LINE OA: ${lineSettings.lineOaId || '@tunfinver'}`}
               </p>
             </div>
           </div>
-
-          {/* Switch to POS button for staff testing */}
-          <button
-            onClick={() => setCurrentView('pos')}
-            className="text-[11px] font-bold text-slate-500 hover:text-slate-800 bg-slate-100 px-2.5 py-1.5 rounded-lg border border-slate-200 flex items-center gap-1 cursor-pointer"
-            title="กลับไปหน้าแคชเชียร์ POS"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">โหมดแคชเชียร์</span>
-          </button>
         </div>
 
-        {/* Dining Type Mode Switcher Tab */}
-        <div className="px-4 py-1.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-2 text-xs">
-          <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200 shadow-2xs font-extrabold">
+        {/* Dining Type Status & Order History */}
+        <div className="px-4 py-2 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-2 text-xs">
+          {diningType === 'dine_in' ? (
+            <div className="flex items-center gap-2">
+              <span className="px-3 py-1.5 rounded-xl bg-indigo-600 text-white font-black text-xs flex items-center gap-1.5 shadow-xs">
+                <UtensilsCrossed className="w-3.5 h-3.5" />
+                <span>ทานที่ร้าน · {tableNumber}</span>
+              </span>
+              <span className="text-[11px] text-slate-500 hidden sm:inline">
+                (รายการที่สั่งจะถูกส่งตรงเข้าห้องครัวทันที)
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200 shadow-2xs font-extrabold">
+              <span className="px-3 py-1.5 rounded-lg bg-red-600 text-white shadow-xs flex items-center gap-1.5">
+                <span>🥡 สั่งกลับบ้าน</span>
+              </span>
+            </div>
+          )}
+
+          {/* Table / Customer Order History Pill */}
+          {tableOrders.length > 0 && (
             <button
               type="button"
-              onClick={() => {
-                setDiningType('dine_in')
-                setPaymentMethod('cash')
-              }}
-              className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
-                diningType === 'dine_in'
-                  ? 'bg-indigo-600 text-white shadow-xs'
-                  : 'text-slate-600 hover:bg-slate-100'
-              }`}
+              onClick={() => setIsOrderHistoryOpen(true)}
+              className="px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-[11px] font-extrabold flex items-center gap-1.5 cursor-pointer transition-all shadow-2xs"
+              title="ดูประวัติอาหารที่สั่งไปแล้ว"
             >
-              <UtensilsCrossed className="w-3.5 h-3.5" />
-              <span>ทานที่ร้าน ({tableNumber})</span>
+              <Receipt className="w-3.5 h-3.5" />
+              <span>ประวัติสั่ง ({tableOrders.length})</span>
             </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setDiningType('takeaway')
-                setPaymentMethod('promptpay')
-              }}
-              className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
-                diningType === 'takeaway'
-                  ? 'bg-red-600 text-white shadow-xs'
-                  : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              <span>🥡 สั่งกลับบ้าน</span>
-            </button>
-          </div>
-
-          {/* Table Number Changer & Order History Pill */}
-          <div className="flex items-center gap-1.5">
-            {diningType === 'dine_in' && (
-              isChangingTable ? (
-                <div className="flex items-center gap-1">
-                  <input
-                    type="text"
-                    value={tableNumber}
-                    onChange={(e) => setTableNumber(e.target.value)}
-                    placeholder="โต๊ะ..."
-                    className="w-16 h-7 px-1.5 text-xs font-black bg-white border border-indigo-400 rounded-lg text-center"
-                    autoFocus
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setIsChangingTable(false)}
-                    className="px-2 h-7 bg-indigo-600 text-white rounded-lg text-[10px] font-bold cursor-pointer"
-                  >
-                    ตกลง
-                  </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setIsChangingTable(true)}
-                  className="text-[11px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded-lg border border-indigo-200 cursor-pointer"
-                >
-                  เปลี่ยนโต๊ะ
-                </button>
-              )
-            )}
-
-            {tableOrders.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setIsOrderHistoryOpen(true)}
-                className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-[11px] font-extrabold flex items-center gap-1 cursor-pointer transition-all shadow-2xs"
-                title="ดูประวัติอาหารที่สั่งไปแล้ว"
-              >
-                <Receipt className="w-3.5 h-3.5" />
-                <span>ประวัติสั่ง ({tableOrders.length})</span>
-              </button>
-            )}
-          </div>
+          )}
         </div>
 
         {/* Welcome & Info Banner */}
@@ -957,9 +897,19 @@ export const LineTakeawayOrderView: React.FC = () => {
                 <div
                   key={item.id}
                   onClick={() => handleItemClick(item)}
-                  className="relative bg-white rounded-2xl p-3 border border-slate-200/90 shadow-2xs hover:shadow-md transition-all cursor-pointer flex flex-col justify-between active:scale-[0.98] group"
+                  className="relative bg-white rounded-2xl p-3 border border-slate-200/90 shadow-2xs hover:shadow-md transition-all cursor-pointer flex flex-col justify-between active:scale-[0.98] group overflow-hidden"
                 >
                   <div>
+                    {item.image && (
+                      <div className="w-full h-28 -mx-3 -mt-3 mb-2.5 overflow-hidden bg-slate-100 flex items-center justify-center">
+                        <img 
+                          src={item.image} 
+                          alt={item.name} 
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
+                          loading="lazy"
+                        />
+                      </div>
+                    )}
                     <div className="flex items-center justify-between gap-1 mb-1">
                       <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-1.5 py-0.2 rounded-md">
                         {MENU_CATEGORIES.find(c => c.id === item.category)?.name || 'เมนู'}
@@ -1071,6 +1021,17 @@ export const LineTakeawayOrderView: React.FC = () => {
             <div className="sm:hidden pt-2.5 pb-1 flex justify-center bg-slate-50">
               <div className="w-12 h-1.5 bg-slate-300 rounded-full" />
             </div>
+
+            {/* Item Image Banner */}
+            {activeItem.image && (
+              <div className="w-full h-44 bg-slate-100 overflow-hidden">
+                <img
+                  src={activeItem.image}
+                  alt={activeItem.name}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            )}
 
             {/* Header */}
             <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">

@@ -10,7 +10,7 @@ import {
   off, 
   type Database 
 } from 'firebase/database'
-import type { Order, ShopSettings, MenuItem, SpicyOption, TableSession } from '../types'
+import type { Order, ShopSettings, MenuItem, SpicyOption, OrderAddonOption, TableSession } from '../types'
 import { getPendingSyncOrders, markOrderAsSynced } from './db'
 
 let firebaseApp: FirebaseApp | null = null
@@ -256,6 +256,57 @@ export function subscribeToFirebaseSpicyOptions(callback: (options: SpicyOption[
 
   return () => {
     if (realtimeDb) off(spicyRef)
+  }
+}
+
+// Push order addons to Firebase
+export async function syncOrderAddonsToFirebase(options: OrderAddonOption[]): Promise<boolean> {
+  if (!isFirebaseReady() || !realtimeDb) return false
+  try {
+    const sanitized = JSON.parse(JSON.stringify(options))
+    try {
+      const addonsRef = ref(realtimeDb, 'orderAddonOptions')
+      await set(addonsRef, sanitized)
+      return true
+    } catch {
+      const fallbackRef = ref(realtimeDb, 'orders/_meta_order_addons')
+      await set(fallbackRef, sanitized)
+      return true
+    }
+  } catch (error) {
+    console.warn('[Firebase] Could not sync order addons to Firebase:', error)
+    return false
+  }
+}
+
+// Subscribe to real-time order addons updates
+export function subscribeToFirebaseOrderAddons(callback: (options: OrderAddonOption[]) => void): () => void {
+  if (!isFirebaseReady() || !realtimeDb) return () => {}
+  const addonsRef = ref(realtimeDb, 'orderAddonOptions')
+  const fallbackRef = ref(realtimeDb, 'orders/_meta_order_addons')
+
+  const handleData = (snapshot: any) => {
+    if (snapshot.exists()) {
+      const data = snapshot.val()
+      if (Array.isArray(data)) {
+        callback(data)
+      } else if (typeof data === 'object' && data !== null) {
+        callback(Object.values(data))
+      }
+    }
+  }
+
+  onValue(addonsRef, handleData, () => {
+    onValue(fallbackRef, handleData, (err) => {
+      console.warn('[Firebase] Order addons fallback subscribe error:', err)
+    })
+  })
+
+  return () => {
+    if (realtimeDb) {
+      off(addonsRef)
+      off(fallbackRef)
+    }
   }
 }
 

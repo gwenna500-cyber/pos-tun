@@ -21,6 +21,14 @@ export interface SpicyOption {
   isAvailable: boolean
 }
 
+export interface OrderAddonOption {
+  id: string
+  label: string
+  desc?: string
+  icon?: string
+  isAvailable: boolean
+}
+
 export interface MenuCategory {
   id: string
   name: string

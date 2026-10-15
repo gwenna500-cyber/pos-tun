@@ -28,7 +28,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
   onSaveSuccess,
   onDeleteSuccess
 }) => {
-  const { menuItems, spicyOptions, updateExistingOrder, deleteExistingOrder } = usePosStore()
+  const { menuItems, spicyOptions, orderAddonOptions, updateExistingOrder, deleteExistingOrder } = usePosStore()
 
   const [items, setItems] = useState<CartItem[]>([])
   const [discount, setDiscount] = useState<number>(0)
@@ -339,31 +339,48 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
           </div>
 
           {/* Section: Order Addons */}
-          <div className="p-3 bg-amber-50/70 rounded-2xl border border-amber-200/80 space-y-2">
-            <label className="text-xs font-bold text-amber-950 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-              <span>ตัวเลือกพิเศษ:</span>
-            </label>
-            <div className="flex flex-wrap gap-1.5">
-              {['โรยงาขาวคั่วเยอะๆ', 'ทอดกรอบแห้งพิเศษ', 'แยกผงหม่าล่า'].map((addon) => {
-                const active = orderAddons.includes(addon)
-                return (
-                  <button
-                    key={addon}
-                    type="button"
-                    onClick={() => toggleAddon(addon)}
-                    className={`py-1.5 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                      active
-                        ? 'bg-amber-500 text-white border-amber-500 shadow-xs'
-                        : 'bg-white border-amber-200 text-slate-700 hover:bg-amber-100/60'
-                    }`}
-                  >
-                    {addon}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
+          {(() => {
+            const availableOptions = orderAddonOptions.filter(a => a.isAvailable !== false)
+            const combinedLabels = Array.from(new Set([
+              ...availableOptions.map(a => a.label),
+              ...orderAddons
+            ]))
+
+            if (combinedLabels.length === 0) return null
+
+            return (
+              <div className="p-3 bg-amber-50/70 rounded-2xl border border-amber-200/80 space-y-2">
+                <label className="text-xs font-bold text-amber-950 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                  <span>ตัวเลือกพิเศษ:</span>
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {combinedLabels.map((addonLabel) => {
+                    const active = orderAddons.includes(addonLabel)
+                    const optionMeta = orderAddonOptions.find(o => o.label === addonLabel)
+                    const icon = optionMeta?.icon || (addonLabel.includes('งา') ? '🌾' : addonLabel.includes('กรอบ') ? '🍟' : '✨')
+
+                    return (
+                      <button
+                        key={addonLabel}
+                        type="button"
+                        onClick={() => toggleAddon(addonLabel)}
+                        className={`py-1.5 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center gap-1 ${
+                          active
+                            ? 'bg-amber-500 text-white border-amber-500 shadow-xs'
+                            : 'bg-white border-amber-200 text-slate-700 hover:bg-amber-100/60'
+                        }`}
+                      >
+                        <span>{icon}</span>
+                        <span>{addonLabel}</span>
+                        {active && <Check className="w-3.5 h-3.5 text-white ml-0.5" />}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })()}
 
           {/* Section: Notes & Discount */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

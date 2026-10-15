@@ -7,6 +7,7 @@ import type {
   ShopSettings, 
   SpicyLevel, 
   SpicyOption,
+  OrderAddonOption,
   MenuCategory,
   CookingMethod, 
   DiningType, 
@@ -19,6 +20,7 @@ import {
   DEFAULT_SHOP_SETTINGS, 
   DEFAULT_MENU_ITEMS, 
   DEFAULT_SPICY_OPTIONS, 
+  DEFAULT_ORDER_ADDONS,
   DEFAULT_MENU_CATEGORIES 
 } from '../lib/constants'
 import { 
@@ -33,6 +35,9 @@ import {
   getSpicyOptionsFromDb,
   saveSpicyOptionsToDb,
   resetSpicyToDefaultsInDb,
+  getOrderAddonOptionsFromDb,
+  saveOrderAddonOptionsToDb,
+  resetOrderAddonsToDefaultsInDb,
   getTableSessionsFromDb,
   saveTableSessionsToDb,
   updateOrderStatusInDb,
@@ -44,6 +49,8 @@ import {
   isFirebaseReady,
   syncMenuItemsToFirebase,
   syncSpicyOptionsToFirebase,
+  syncOrderAddonsToFirebase,
+  subscribeToFirebaseOrderAddons,
   updateFirebaseTableSession,
   subscribeToFirebaseTableSessions,
   updateFirebaseOrderStatus,
@@ -107,6 +114,14 @@ interface PosState {
   toggleSpicyOptionAvailability: (id: string) => Promise<void>
   resetMenuDefaults: () => Promise<void>
   resetSpicyDefaults: () => Promise<void>
+
+  // Order Addons options
+  orderAddonOptions: OrderAddonOption[]
+  addOrderAddonRecord: (option: Omit<OrderAddonOption, 'id'>) => Promise<OrderAddonOption>
+  updateOrderAddonRecord: (id: string, updates: Partial<OrderAddonOption>) => Promise<void>
+  deleteOrderAddonRecord: (id: string) => Promise<void>
+  toggleOrderAddonAvailability: (id: string) => Promise<void>
+  resetOrderAddonDefaults: () => Promise<void>
 
   // Checkout & Modals
   isPaymentModalOpen: boolean
@@ -192,17 +207,20 @@ export const usePosStore = create<PosState>((set, get) => ({
 
   menuItems: DEFAULT_MENU_ITEMS,
   spicyOptions: DEFAULT_SPICY_OPTIONS,
+  orderAddonOptions: DEFAULT_ORDER_ADDONS,
   categories: DEFAULT_MENU_CATEGORIES,
 
   loadMenuAndSpicy: async () => {
     try {
       const items = await getAllMenuItemsFromDb()
       const spicy = await getSpicyOptionsFromDb()
+      const addons = await getOrderAddonOptionsFromDb()
       const settingsRecord = await db.settings.get('shopSettings')
       if (settingsRecord && settingsRecord.value) {
         set({ 
           menuItems: items, 
           spicyOptions: spicy,
+          orderAddonOptions: addons,
           shopSettings: {
             ...DEFAULT_SHOP_SETTINGS,
             ...settingsRecord.value,
@@ -213,11 +231,20 @@ export const usePosStore = create<PosState>((set, get) => ({
           }
         })
       } else {
-        set({ menuItems: items, spicyOptions: spicy })
+        set({ menuItems: items, spicyOptions: spicy, orderAddonOptions: addons })
       }
       get().loadTableSessions()
+
+      if (isFirebaseReady()) {
+        subscribeToFirebaseOrderAddons((cloudAddons) => {
+          if (cloudAddons && cloudAddons.length > 0) {
+            set({ orderAddonOptions: cloudAddons })
+            saveOrderAddonOptionsToDb(cloudAddons).catch(console.error)
+          }
+        })
+      }
     } catch (err) {
-      console.error('Failed to load menu & spicy:', err)
+      console.error('Failed to load menu, spicy & addons:', err)
     }
   },
 
@@ -311,6 +338,49 @@ export const usePosStore = create<PosState>((set, get) => ({
     const spicy = await resetSpicyToDefaultsInDb()
     set({ spicyOptions: spicy })
     syncSpicyOptionsToFirebase(spicy).catch(console.error)
+  },
+
+  addOrderAddonRecord: async (addonData) => {
+    const newAddon: OrderAddonOption = {
+      ...addonData,
+      id: `addon_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
+    }
+    const updated = [...get().orderAddonOptions, newAddon]
+    set({ orderAddonOptions: updated })
+    await saveOrderAddonOptionsToDb(updated)
+    syncOrderAddonsToFirebase(updated).catch(console.error)
+    return newAddon
+  },
+
+  updateOrderAddonRecord: async (id, updates) => {
+    const current = get().orderAddonOptions
+    const updated = current.map(a => a.id === id ? { ...a, ...updates } : a)
+    set({ orderAddonOptions: updated })
+    await saveOrderAddonOptionsToDb(updated)
+    syncOrderAddonsToFirebase(updated).catch(console.error)
+  },
+
+  deleteOrderAddonRecord: async (id) => {
+    const updated = get().orderAddonOptions.filter(a => a.id !== id)
+    set({ orderAddonOptions: updated })
+    await saveOrderAddonOptionsToDb(updated)
+    syncOrderAddonsToFirebase(updated).catch(console.error)
+  },
+
+  toggleOrderAddonAvailability: async (id) => {
+    const current = get().orderAddonOptions
+    const updated = current.map(a =>
+      a.id === id ? { ...a, isAvailable: !a.isAvailable } : a
+    )
+    set({ orderAddonOptions: updated })
+    await saveOrderAddonOptionsToDb(updated)
+    syncOrderAddonsToFirebase(updated).catch(console.error)
+  },
+
+  resetOrderAddonDefaults: async () => {
+    const addons = await resetOrderAddonsToDefaultsInDb()
+    set({ orderAddonOptions: addons })
+    syncOrderAddonsToFirebase(addons).catch(console.error)
   },
 
   addStickByColor: (colorId) => {

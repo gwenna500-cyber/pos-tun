@@ -14,11 +14,12 @@ import {
   Eye,
   AlertTriangle,
   Image as ImageIcon,
-  Upload
+  Upload,
+  Sparkles
 } from 'lucide-react'
 import { usePosStore } from '../store/usePosStore'
 import { MENU_CATEGORIES } from '../lib/constants'
-import type { MenuItem, SpicyOption } from '../types'
+import type { MenuItem, SpicyOption, OrderAddonOption } from '../types'
 
 // Client-side image compressor: scales down to max 480px and outputs ~30-50KB WebP/JPEG data URL
 const compressImageFile = (file: File): Promise<string> => {
@@ -75,10 +76,13 @@ const BADGE_COLOR_PRESETS = [
   { id: 'sky', name: 'ฟ้าสดใส (ซอสสูตรลับ)', class: 'bg-sky-100 text-sky-800 border-sky-300' },
 ]
 
+const ADDON_ICON_PRESETS = ['🌾', '🍟', '✨', '🔥', '🌶️', '🥢', '🧀', '🧄', '🧅', '🌿', '🧂', '🥣', '🏷️', '🍗']
+
 export const MenuManagementView: React.FC = () => {
   const { 
     menuItems, 
     spicyOptions,
+    orderAddonOptions,
     addMenuItemRecord,
     updateMenuItemRecord,
     deleteMenuItemRecord,
@@ -87,12 +91,17 @@ export const MenuManagementView: React.FC = () => {
     updateSpicyOptionRecord,
     deleteSpicyOptionRecord,
     toggleSpicyOptionAvailability,
+    addOrderAddonRecord,
+    updateOrderAddonRecord,
+    deleteOrderAddonRecord,
+    toggleOrderAddonAvailability,
     resetMenuDefaults,
-    resetSpicyDefaults
+    resetSpicyDefaults,
+    resetOrderAddonDefaults
   } = usePosStore()
 
-  // Main Sub-Tab: 'items' (เมนูอาหาร) vs 'spicy' (ระดับความเผ็ด)
-  const [activeTab, setActiveTab] = useState<'items' | 'spicy'>('items')
+  // Main Sub-Tab: 'items' (เมนูอาหาร) vs 'spicy' (ระดับความเผ็ด) vs 'addons' (ตัวเลือกพิเศษของบิล)
+  const [activeTab, setActiveTab] = useState<'items' | 'spicy' | 'addons'>('items')
 
   // Menu Search & Category Filter
   const [searchQuery, setSearchQuery] = useState('')
@@ -118,6 +127,17 @@ export const MenuManagementView: React.FC = () => {
     label: '',
     desc: '',
     badgeClass: 'bg-red-600 text-white border-red-700',
+    isAvailable: true
+  })
+
+  // Order Addon Modal State
+  const [isAddonModalOpen, setIsAddonModalOpen] = useState(false)
+  const [editingAddon, setEditingAddon] = useState<OrderAddonOption | null>(null)
+  const [addonToDelete, setAddonToDelete] = useState<OrderAddonOption | null>(null)
+  const [addonForm, setAddonForm] = useState({
+    label: '',
+    desc: '',
+    icon: '✨',
     isAvailable: true
   })
 
@@ -276,6 +296,67 @@ export const MenuManagementView: React.FC = () => {
     }
   }
 
+  // --- Handlers for Order Addons ---
+  const handleOpenAddAddonModal = () => {
+    setEditingAddon(null)
+    setAddonForm({
+      label: '',
+      desc: '',
+      icon: '✨',
+      isAvailable: true
+    })
+    setIsAddonModalOpen(true)
+  }
+
+  const handleOpenEditAddonModal = (addon: OrderAddonOption) => {
+    setEditingAddon(addon)
+    setAddonForm({
+      label: addon.label,
+      desc: addon.desc || '',
+      icon: addon.icon || '✨',
+      isAvailable: addon.isAvailable !== false
+    })
+    setIsAddonModalOpen(true)
+  }
+
+  const handleSaveAddon = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!addonForm.label.trim()) {
+      alert('กรุณากรอกชื่อตัวเลือกพิเศษ')
+      return
+    }
+
+    if (editingAddon) {
+      await updateOrderAddonRecord(editingAddon.id, {
+        label: addonForm.label.trim(),
+        desc: addonForm.desc.trim(),
+        icon: addonForm.icon.trim() || '✨',
+        isAvailable: addonForm.isAvailable
+      })
+    } else {
+      await addOrderAddonRecord({
+        label: addonForm.label.trim(),
+        desc: addonForm.desc.trim(),
+        icon: addonForm.icon.trim() || '✨',
+        isAvailable: addonForm.isAvailable
+      })
+    }
+
+    setIsAddonModalOpen(false)
+  }
+
+  const handleConfirmDeleteAddon = async () => {
+    if (!addonToDelete) return
+    await deleteOrderAddonRecord(addonToDelete.id)
+    setAddonToDelete(null)
+  }
+
+  const handleResetAddons = () => {
+    if (confirm('ต้องการรีเซ็ตตัวเลือกพิเศษของบิลทั้งหมดกลับเป็นค่าเริ่มต้นหรือไม่?')) {
+      resetOrderAddonDefaults()
+    }
+  }
+
   return (
     <div className="max-w-7xl mx-auto p-3 sm:p-6 space-y-5 pb-20">
       {/* Top Header & Tab Navigation */}
@@ -283,18 +364,18 @@ export const MenuManagementView: React.FC = () => {
         <div>
           <h1 className="text-xl sm:text-2xl font-black text-slate-900 flex items-center gap-2">
             <UtensilsCrossed className="w-6 h-6 text-red-600" />
-            <span>จัดการเมนู & ระดับความเผ็ด</span>
+            <span>จัดการเมนู & ตัวเลือกพิเศษ</span>
           </h1>
           <p className="text-xs text-slate-500 font-medium mt-0.5">
-            เพิ่ม ลบ แก้ไข เมนูอาหาร และกำหนดตัวเลือกระดับความเผ็ดชาสำหรับลูกค้า
+            เพิ่ม ลบ แก้ไข เมนูอาหาร, ระดับความเผ็ด และตัวเลือกพิเศษของบิล
           </p>
         </div>
 
         {/* Sub-tab pills */}
-        <div className="flex items-center bg-slate-100 p-1.5 rounded-xl border border-slate-200">
+        <div className="flex items-center bg-slate-100 p-1.5 rounded-xl border border-slate-200 flex-wrap gap-1">
           <button
             onClick={() => setActiveTab('items')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-bold transition-all cursor-pointer ${
               activeTab === 'items'
                 ? 'bg-red-600 text-white shadow-xs'
                 : 'text-slate-600 hover:text-slate-900'
@@ -306,7 +387,7 @@ export const MenuManagementView: React.FC = () => {
 
           <button
             onClick={() => setActiveTab('spicy')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-bold transition-all cursor-pointer ${
               activeTab === 'spicy'
                 ? 'bg-red-600 text-white shadow-xs'
                 : 'text-slate-600 hover:text-slate-900'
@@ -314,6 +395,18 @@ export const MenuManagementView: React.FC = () => {
           >
             <Flame className="w-4 h-4" />
             <span>ระดับความเผ็ด ({spicyOptions.length})</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('addons')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+              activeTab === 'addons'
+                ? 'bg-amber-500 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Sparkles className="w-4 h-4" />
+            <span>ตัวเลือกพิเศษของบิล ({orderAddonOptions.length})</span>
           </button>
         </div>
       </div>
@@ -635,6 +728,146 @@ export const MenuManagementView: React.FC = () => {
               )
             })}
           </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB 3: ORDER ADDONS / SPECIAL BILL MODIFIERS MANAGEMENT */}
+      {/* ========================================================================= */}
+      {activeTab === 'addons' && (
+        <div className="space-y-4">
+          {/* Action Bar */}
+          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-amber-500" />
+                <span>ตัวเลือกพิเศษของบิลทั้งหมด ({orderAddonOptions.length} ตัวเลือก)</span>
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                ตัวเลือกพิเศษที่ลูกค้าและแคชเชียร์เลือกได้ตอนเช็คบิล เช่น โรยงาขาวคั่วเยอะๆ, ทอดกรอบแห้งพิเศษ, แยกผง, ไม่ใส่กระเทียม ฯลฯ
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleResetAddons}
+                className="px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                title="รีเซ็ตเป็นตัวเลือกพิเศษเริ่มต้น"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
+                <span className="hidden sm:inline">รีเซ็ตค่าเริ่มต้น</span>
+              </button>
+
+              <button
+                onClick={handleOpenAddAddonModal}
+                className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold flex items-center gap-1.5 shadow-md shadow-amber-200 transition-all cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>เพิ่มตัวเลือกพิเศษใหม่</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Order Addons Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+            {orderAddonOptions.map((addon) => {
+              const isAvailable = addon.isAvailable !== false
+              return (
+                <div
+                  key={addon.id}
+                  className={`bg-white rounded-2xl p-4 border transition-all flex flex-col justify-between shadow-xs ${
+                    isAvailable ? 'border-amber-200/80 bg-gradient-to-b from-amber-50/20 to-white' : 'border-slate-200 opacity-60 bg-slate-50/70'
+                  }`}
+                >
+                  <div>
+                    {/* Header: Icon + Availability Badge */}
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="w-8 h-8 rounded-xl bg-amber-100 flex items-center justify-center text-lg shadow-2xs">
+                          {addon.icon || '✨'}
+                        </span>
+                        <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                          {addon.label}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => toggleOrderAddonAvailability(addon.id)}
+                        className={`text-[10px] font-black px-2 py-0.5 rounded-full transition-colors cursor-pointer flex items-center gap-1 ${
+                          isAvailable
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-slate-200 text-slate-700'
+                        }`}
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full ${isAvailable ? 'bg-emerald-600' : 'bg-slate-500'}`} />
+                        <span>{isAvailable ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}</span>
+                      </button>
+                    </div>
+
+                    <h3 className="font-bold text-slate-900 text-sm mt-1">
+                      {addon.icon ? `${addon.icon} ` : ''}{addon.label}
+                    </h3>
+
+                    {addon.desc && (
+                      <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                        {addon.desc}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Actions */}
+                  <div className="mt-4 pt-2.5 border-t border-slate-100 flex items-center justify-between">
+                    <button
+                      onClick={() => toggleOrderAddonAvailability(addon.id)}
+                      className="text-xs text-slate-500 hover:text-slate-800 flex items-center gap-1 font-medium cursor-pointer"
+                    >
+                      {isAvailable ? (
+                        <>
+                          <ToggleRight className="w-5 h-5 text-emerald-600" />
+                          <span className="text-[11px]">เปิดให้เลือก</span>
+                        </>
+                      ) : (
+                        <>
+                          <ToggleLeft className="w-5 h-5 text-slate-400" />
+                          <span className="text-[11px] text-slate-500">ซ่อนจากหน้าจอ</span>
+                        </>
+                      )}
+                    </button>
+
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => handleOpenEditAddonModal(addon)}
+                        className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-amber-50 hover:text-amber-700 text-slate-600 flex items-center justify-center transition-colors cursor-pointer"
+                        title="แก้ไขตัวเลือก"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                      </button>
+
+                      <button
+                        onClick={() => setAddonToDelete(addon)}
+                        className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-rose-50 hover:text-rose-600 text-slate-600 flex items-center justify-center transition-colors cursor-pointer"
+                        title="ลบตัวเลือก"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          {orderAddonOptions.length === 0 && (
+            <div className="bg-white rounded-2xl p-12 text-center border border-dashed border-amber-300">
+              <p className="text-slate-500 text-sm font-semibold">ยังไม่มีตัวเลือกพิเศษของบิล</p>
+              <button
+                onClick={handleOpenAddAddonModal}
+                className="mt-3 px-4 py-2 rounded-xl bg-amber-500 text-white text-xs font-bold inline-flex items-center gap-1.5"
+              >
+                <Plus className="w-4 h-4" />
+                <span>เพิ่มตัวเลือกพิเศษแรก</span>
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -1002,6 +1235,171 @@ export const MenuManagementView: React.FC = () => {
               <button
                 onClick={handleConfirmDeleteSpicy}
                 className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-sm"
+              >
+                ลบตัวเลือกนี้
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: ADD / EDIT ORDER ADDON */}
+      {/* ========================================================================= */}
+      {isAddonModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
+            {/* Header */}
+            <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-amber-50/60">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-amber-500" />
+                <h3 className="font-black text-slate-900 text-base">
+                  {editingAddon ? 'แก้ไขตัวเลือกพิเศษ' : 'เพิ่มตัวเลือกพิเศษใหม่'}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAddonModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleSaveAddon} className="p-4 space-y-3.5 overflow-y-auto">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  ไอคอน / อีโมจิ <span className="text-amber-500">*</span>
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    required
+                    value={addonForm.icon}
+                    onChange={(e) => setAddonForm({ ...addonForm, icon: e.target.value })}
+                    className="w-16 h-10 text-center text-xl bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500 font-bold"
+                  />
+                  <div className="flex items-center gap-1 overflow-x-auto py-1 scrollbar-none">
+                    {ADDON_ICON_PRESETS.map((icon) => (
+                      <button
+                        key={icon}
+                        type="button"
+                        onClick={() => setAddonForm({ ...addonForm, icon })}
+                        className={`w-8 h-8 rounded-lg border text-sm flex items-center justify-center cursor-pointer transition-all ${
+                          addonForm.icon === icon
+                            ? 'border-amber-500 bg-amber-100 ring-2 ring-amber-300'
+                            : 'border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        {icon}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  ชื่อตัวเลือกพิเศษ <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={addonForm.label}
+                  onChange={(e) => setAddonForm({ ...addonForm, label: e.target.value })}
+                  placeholder="เช่น โรยงาขาวคั่วเยอะๆ, ทอดกรอบแห้งพิเศษ, แยกผง..."
+                  className="w-full h-10 px-3 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  คำอธิบายสั้น ๆ (ไม่บังคับ)
+                </label>
+                <input
+                  type="text"
+                  value={addonForm.desc}
+                  onChange={(e) => setAddonForm({ ...addonForm, desc: e.target.value })}
+                  placeholder="เช่น หอมกลิ่นงาคั่วพิเศษ, สะเด็ดน้ำมันแห้งกรอบ..."
+                  className="w-full h-10 px-3 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+
+              {/* Live Preview */}
+              <div className="p-3 bg-amber-50/50 rounded-xl border border-amber-200/80 space-y-1">
+                <span className="text-[11px] font-bold text-amber-800 flex items-center gap-1">
+                  <Eye className="w-3.5 h-3.5" />
+                  <span>ตัวอย่างปุ่มที่ลูกค้า/แคชเชียร์จะเห็นตอนสั่ง:</span>
+                </span>
+                <div className="pt-1">
+                  <div className="inline-flex items-center gap-1.5 p-2 rounded-xl bg-amber-500 text-white font-bold text-xs shadow-xs">
+                    <span>{addonForm.icon || '✨'}</span>
+                    <span>{addonForm.label || 'ชื่อตัวเลือก'}</span>
+                    <Check className="w-3.5 h-3.5 text-white ml-1" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Enabled toggle */}
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between">
+                <div>
+                  <div className="text-xs font-bold text-slate-800">เปิดใช้งานตัวเลือกนี้</div>
+                  <div className="text-[11px] text-slate-500">หากปิด ตัวเลือกนี้จะไม่แสดงในหน้าจอขายหรือเมนูลูกค้า</div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={addonForm.isAvailable}
+                  onChange={(e) => setAddonForm({ ...addonForm, isAvailable: e.target.checked })}
+                  className="w-5 h-5 accent-amber-500 cursor-pointer"
+                />
+              </div>
+
+              {/* Actions */}
+              <div className="pt-2 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsAddonModalOpen(false)}
+                  className="flex-1 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold shadow-md shadow-amber-200 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>บันทึกตัวเลือกพิเศษ</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* DELETE ORDER ADDON CONFIRM MODAL */}
+      {/* ========================================================================= */}
+      {addonToDelete && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-5 text-center space-y-3 shadow-2xl border border-slate-200 animate-scale-up">
+            <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <h3 className="font-black text-slate-900 text-base">ยืนยันการลบตัวเลือกพิเศษ?</h3>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              คุณต้องการลบตัวเลือก <strong className="text-slate-800">"{addonToDelete.icon ? `${addonToDelete.icon} ` : ''}{addonToDelete.label}"</strong> ใช่หรือไม่?
+            </p>
+            <div className="pt-2 flex items-center gap-2">
+              <button
+                onClick={() => setAddonToDelete(null)}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-100 cursor-pointer"
+              >
+                ยกเลิก
+              </button>
+              <button
+                onClick={handleConfirmDeleteAddon}
+                className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-sm cursor-pointer"
               >
                 ลบตัวเลือกนี้
               </button>

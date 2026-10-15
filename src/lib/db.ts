@@ -1,6 +1,6 @@
 import Dexie, { type Table } from 'dexie'
-import type { Order, MenuItem, SpicyOption, TableSession } from '../types'
-import { DEFAULT_MENU_ITEMS, DEFAULT_SHOP_SETTINGS, DEFAULT_SPICY_OPTIONS } from './constants'
+import type { Order, MenuItem, SpicyOption, OrderAddonOption, TableSession } from '../types'
+import { DEFAULT_MENU_ITEMS, DEFAULT_SHOP_SETTINGS, DEFAULT_SPICY_OPTIONS, DEFAULT_ORDER_ADDONS } from './constants'
 
 export class PosDatabase extends Dexie {
   orders!: Table<Order, string>
@@ -175,6 +175,30 @@ export async function saveSpicyOptionsToDb(options: SpicyOption[]): Promise<void
 export async function resetSpicyToDefaultsInDb(): Promise<SpicyOption[]> {
   await db.settings.put({ key: 'spicyOptions', value: DEFAULT_SPICY_OPTIONS })
   return DEFAULT_SPICY_OPTIONS
+}
+
+// Order Addon options CRUD
+export async function getOrderAddonOptionsFromDb(): Promise<OrderAddonOption[]> {
+  try {
+    const record = await db.settings.get('orderAddonOptions')
+    if (record && record.value && Array.isArray(record.value) && record.value.length > 0) {
+      return record.value
+    }
+    await db.settings.put({ key: 'orderAddonOptions', value: DEFAULT_ORDER_ADDONS })
+    return DEFAULT_ORDER_ADDONS
+  } catch (err) {
+    console.error('Error loading order addon options from db:', err)
+    return DEFAULT_ORDER_ADDONS
+  }
+}
+
+export async function saveOrderAddonOptionsToDb(options: OrderAddonOption[]): Promise<void> {
+  await db.settings.put({ key: 'orderAddonOptions', value: options })
+}
+
+export async function resetOrderAddonsToDefaultsInDb(): Promise<OrderAddonOption[]> {
+  await db.settings.put({ key: 'orderAddonOptions', value: DEFAULT_ORDER_ADDONS })
+  return DEFAULT_ORDER_ADDONS
 }
 
 // ----------------------------------------------------

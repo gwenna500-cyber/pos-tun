@@ -1,4 +1,4 @@
-import type { MenuItem, SpicyOption, MenuCategory, CookingMethod, DiningType, ShopSettings, LineOaSettings } from '../types'
+import type { MenuItem, SpicyOption, OrderAddonOption, MenuCategory, CookingMethod, DiningType, ShopSettings, LineOaSettings } from '../types'
 
 export const DEFAULT_MENU_CATEGORIES: MenuCategory[] = [
   { id: 'all', name: 'ทั้งหมด' },
@@ -54,9 +54,9 @@ export const DEFAULT_SPICY_OPTIONS: SpicyOption[] = [
   { id: 'separate', label: 'ผงพริกแยก (ใส่ถ้วย)', desc: 'แยกผงหม่าล่าใส่ถ้วยไปจิ้มเอง', badgeClass: 'bg-purple-100 text-purple-800 border-purple-300', isAvailable: true }
 ]
 
-export const DEFAULT_ORDER_ADDONS = [
-  { id: 'extra_sesame', label: 'โรยงาขาวคั่วเยอะๆ', desc: 'หอมกลิ่นงาคั่วพิเศษ' },
-  { id: 'dry_crispy', label: 'ทอดกรอบแห้งพิเศษ', desc: 'ทอดสะเด็ดน้ำมันแห้งสนิท กรอบนาน' }
+export const DEFAULT_ORDER_ADDONS: OrderAddonOption[] = [
+  { id: 'extra_sesame', label: 'โรยงาขาวคั่วเยอะๆ', desc: 'หอมกลิ่นงาคั่วพิเศษ', icon: '🌾', isAvailable: true },
+  { id: 'dry_crispy', label: 'ทอดกรอบแห้งพิเศษ', desc: 'ทอดสะเด็ดน้ำมันแห้งสนิท กรอบนาน', icon: '🍟', isAvailable: true }
 ]
 
 export const SPICY_LEVELS = DEFAULT_SPICY_OPTIONS

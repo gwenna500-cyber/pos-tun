@@ -25,6 +25,7 @@ export const PaymentModal: React.FC = () => {
     finalizeCheckout,
     orderAddons,
     toggleOrderAddon,
+    orderAddonOptions,
     spicyLevel,
     setSpicyLevel,
     spicyOptions
@@ -271,41 +272,37 @@ export const PaymentModal: React.FC = () => {
           </div>
 
           {/* Order Addons (ตัวเลือกพิเศษตอนกำลังจะคิดตังค์) */}
-          <div className="bg-amber-50/80 p-3 rounded-2xl border border-amber-200">
-            <div className="text-xs font-bold text-amber-950 mb-1.5 flex items-center justify-between">
-              <span className="flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                <span>ตัวเลือกพิเศษของบิลนี้:</span>
-              </span>
-              <span className="text-[10px] text-amber-700 font-semibold">เลือกได้หลายอย่าง</span>
+          {orderAddonOptions.filter(a => a.isAvailable !== false).length > 0 && (
+            <div className="bg-amber-50/80 p-3 rounded-2xl border border-amber-200">
+              <div className="text-xs font-bold text-amber-950 mb-1.5 flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                  <span>ตัวเลือกพิเศษของบิลนี้:</span>
+                </span>
+                <span className="text-[10px] text-amber-700 font-semibold">เลือกได้หลายอย่าง</span>
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                {orderAddonOptions.filter(a => a.isAvailable !== false).map((addon) => {
+                  const isSelected = orderAddons.includes(addon.label)
+                  return (
+                    <button
+                      key={addon.id}
+                      type="button"
+                      onClick={() => toggleOrderAddon(addon.label)}
+                      className={`p-2 rounded-xl border text-left text-xs font-bold flex items-center justify-between cursor-pointer transition-all ${
+                        isSelected
+                          ? 'bg-amber-500 text-white border-amber-500 shadow-xs ring-2 ring-amber-300'
+                          : 'bg-white border-amber-200 text-slate-700 hover:bg-amber-50'
+                      }`}
+                    >
+                      <span className="truncate">{addon.icon ? `${addon.icon} ` : '✨ '}{addon.label}</span>
+                      {isSelected && <Check className="w-3.5 h-3.5 text-white flex-shrink-0 ml-1" />}
+                    </button>
+                  )
+                })}
+              </div>
             </div>
-            <div className="grid grid-cols-2 gap-1.5">
-              <button
-                type="button"
-                onClick={() => toggleOrderAddon('โรยงาขาวคั่วเยอะๆ')}
-                className={`p-2 rounded-xl border text-left text-xs font-bold flex items-center justify-between cursor-pointer transition-all ${
-                  orderAddons.includes('โรยงาขาวคั่วเยอะๆ')
-                    ? 'bg-amber-500 text-white border-amber-500 shadow-xs ring-2 ring-amber-300'
-                    : 'bg-white border-amber-200 text-slate-700 hover:bg-amber-50'
-                }`}
-              >
-                <span>🌾 โรยงาขาวคั่วเยอะๆ</span>
-                {orderAddons.includes('โรยงาขาวคั่วเยอะๆ') && <Check className="w-3.5 h-3.5 text-white" />}
-              </button>
-              <button
-                type="button"
-                onClick={() => toggleOrderAddon('ทอดกรอบแห้งพิเศษ')}
-                className={`p-2 rounded-xl border text-left text-xs font-bold flex items-center justify-between cursor-pointer transition-all ${
-                  orderAddons.includes('ทอดกรอบแห้งพิเศษ')
-                    ? 'bg-amber-500 text-white border-amber-500 shadow-xs ring-2 ring-amber-300'
-                    : 'bg-white border-amber-200 text-slate-700 hover:bg-amber-50'
-                }`}
-              >
-                <span>🍟 ทอดกรอบแห้งพิเศษ</span>
-                {orderAddons.includes('ทอดกรอบแห้งพิเศษ') && <Check className="w-3.5 h-3.5 text-white" />}
-              </button>
-            </div>
-          </div>
+          )}
 
           {/* Quick Discount Adjustment */}
           <div className="flex items-center justify-between pt-1 text-xs">

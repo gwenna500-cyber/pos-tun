@@ -33,6 +33,7 @@ export const LineTakeawayOrderView: React.FC = () => {
   const { 
     menuItems, 
     spicyOptions, 
+    orderAddonOptions,
     shopSettings, 
     tableSessions,
     submitCustomerOrder
@@ -433,11 +434,15 @@ export const LineTakeawayOrderView: React.FC = () => {
               {completedOrder.orderAddons && completedOrder.orderAddons.length > 0 && (
                 <>
                   <span className="font-bold ml-1.5">✨ พิเศษ:</span>
-                  {completedOrder.orderAddons.map((addon, idx) => (
-                    <span key={idx} className="bg-white/20 px-2 py-0.5 rounded-md font-bold">
-                      {addon.includes('งา') ? `🌾 ${addon}` : addon.includes('กรอบ') ? `🍟 ${addon}` : addon}
-                    </span>
-                  ))}
+                  {completedOrder.orderAddons.map((addon, idx) => {
+                    const matched = orderAddonOptions.find(o => o.label === addon)
+                    const icon = matched?.icon || (addon.includes('งา') ? '🌾' : addon.includes('กรอบ') ? '🍟' : '✨')
+                    return (
+                      <span key={idx} className="bg-white/20 px-2 py-0.5 rounded-md font-bold">
+                        {icon} {addon}
+                      </span>
+                    )
+                  })}
                 </>
               )}
             </div>
@@ -1458,48 +1463,41 @@ export const LineTakeawayOrderView: React.FC = () => {
               </div>
 
               {/* Extra Bill Options (ตอนกำลังจะคิดตังค์) */}
-              <div className="bg-amber-50/80 p-3.5 rounded-2xl border border-amber-200/90 space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-black text-amber-950 flex items-center gap-1.5">
-                    <Sparkles className="w-4 h-4 text-amber-600" />
-                    <span>ตัวเลือกพิเศษของบิลนี้:</span>
-                  </label>
-                  <span className="text-[10px] font-bold text-amber-800 bg-amber-100/90 px-2 py-0.5 rounded-md">
-                    เลือกได้หลายอย่าง (ฟรี)
-                  </span>
+              {orderAddonOptions.filter(a => a.isAvailable !== false).length > 0 && (
+                <div className="bg-amber-50/80 p-3.5 rounded-2xl border border-amber-200/90 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-black text-amber-950 flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-amber-600" />
+                      <span>ตัวเลือกพิเศษของบิลนี้:</span>
+                    </label>
+                    <span className="text-[10px] font-bold text-amber-800 bg-amber-100/90 px-2 py-0.5 rounded-md">
+                      เลือกได้หลายอย่าง (ฟรี)
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {orderAddonOptions.filter(a => a.isAvailable !== false).map((addon) => {
+                      const isSelected = customerOrderAddons.includes(addon.label)
+                      return (
+                        <button
+                          key={addon.id}
+                          type="button"
+                          onClick={() => toggleCustomerOrderAddon(addon.label)}
+                          className={`p-2.5 rounded-xl border text-left transition-all text-xs font-black flex items-center justify-between cursor-pointer ${
+                            isSelected
+                              ? 'bg-amber-500 text-white border-amber-500 shadow-xs ring-2 ring-amber-300'
+                              : 'bg-white border-amber-200 text-amber-950 hover:bg-amber-100/50'
+                          }`}
+                        >
+                          <div className="truncate">{addon.icon ? `${addon.icon} ` : '✨ '}{addon.label}</div>
+                          {isSelected && (
+                            <Check className="w-4 h-4 text-white flex-shrink-0 ml-1" />
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => toggleCustomerOrderAddon('โรยงาขาวคั่วเยอะๆ')}
-                    className={`p-2.5 rounded-xl border text-left transition-all text-xs font-black flex items-center justify-between cursor-pointer ${
-                      customerOrderAddons.includes('โรยงาขาวคั่วเยอะๆ')
-                        ? 'bg-amber-500 text-white border-amber-500 shadow-xs ring-2 ring-amber-300'
-                        : 'bg-white border-amber-200 text-amber-950 hover:bg-amber-100/50'
-                    }`}
-                  >
-                    <div className="truncate">🌾 โรยงาขาวคั่วเยอะๆ</div>
-                    {customerOrderAddons.includes('โรยงาขาวคั่วเยอะๆ') && (
-                      <Check className="w-4 h-4 text-white flex-shrink-0" />
-                    )}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => toggleCustomerOrderAddon('ทอดกรอบแห้งพิเศษ')}
-                    className={`p-2.5 rounded-xl border text-left transition-all text-xs font-black flex items-center justify-between cursor-pointer ${
-                      customerOrderAddons.includes('ทอดกรอบแห้งพิเศษ')
-                        ? 'bg-amber-500 text-white border-amber-500 shadow-xs ring-2 ring-amber-300'
-                        : 'bg-white border-amber-200 text-amber-950 hover:bg-amber-100/50'
-                    }`}
-                  >
-                    <div className="truncate">🍟 ทอดกรอบแห้งพิเศษ</div>
-                    {customerOrderAddons.includes('ทอดกรอบแห้งพิเศษ') && (
-                      <Check className="w-4 h-4 text-white flex-shrink-0" />
-                    )}
-                  </button>
-                </div>
-              </div>
+              )}
 
               {/* Order Notes */}
               <div>

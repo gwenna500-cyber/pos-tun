@@ -36,7 +36,8 @@ export const CartPanel: React.FC<CartPanelProps> = ({ isMobileDrawer = false }) 
     spicyLevel,
     setSpicyLevel,
     orderAddons,
-    toggleOrderAddon
+    toggleOrderAddon,
+    orderAddonOptions
   } = usePosStore()
 
   const totalItemsCount = cart.reduce((sum, item) => sum + item.quantity, 0)
@@ -223,41 +224,38 @@ export const CartPanel: React.FC<CartPanelProps> = ({ isMobileDrawer = false }) 
         </div>
 
         {/* Extra Order Options (ตอนกำลังจะคิดตังค์) */}
-        <div>
-          <label className="block text-[11px] font-bold text-slate-700 mb-1 flex items-center justify-between">
-            <span className="flex items-center gap-1">
-              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-              <span>ตัวเลือกพิเศษของบิลนี้ (เลือกได้หลายอย่าง):</span>
-            </span>
-          </label>
-          <div className="grid grid-cols-2 gap-1.5">
-            <button
-              type="button"
-              onClick={() => toggleOrderAddon('โรยงาขาวคั่วเยอะๆ')}
-              className={`p-2 rounded-xl border text-left transition-all text-xs font-bold flex items-center justify-between cursor-pointer ${
-                orderAddons.includes('โรยงาขาวคั่วเยอะๆ')
-                  ? 'bg-amber-500 text-white border-amber-500 shadow-xs'
-                  : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-              }`}
-            >
-              <div className="truncate">🌾 โรยงาขาวคั่วเยอะๆ</div>
-              {orderAddons.includes('โรยงาขาวคั่วเยอะๆ') && <Check className="w-3.5 h-3.5 text-white flex-shrink-0" />}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => toggleOrderAddon('ทอดกรอบแห้งพิเศษ')}
-              className={`p-2 rounded-xl border text-left transition-all text-xs font-bold flex items-center justify-between cursor-pointer ${
-                orderAddons.includes('ทอดกรอบแห้งพิเศษ')
-                  ? 'bg-amber-500 text-white border-amber-500 shadow-xs'
-                  : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-              }`}
-            >
-              <div className="truncate">🍟 ทอดกรอบแห้งพิเศษ</div>
-              {orderAddons.includes('ทอดกรอบแห้งพิเศษ') && <Check className="w-3.5 h-3.5 text-white flex-shrink-0" />}
-            </button>
+        {orderAddonOptions.filter(a => a.isAvailable !== false).length > 0 && (
+          <div>
+            <label className="block text-[11px] font-bold text-slate-700 mb-1 flex items-center justify-between">
+              <span className="flex items-center gap-1">
+                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                <span>ตัวเลือกพิเศษของบิลนี้ (เลือกได้หลายอย่าง):</span>
+              </span>
+            </label>
+            <div className="grid grid-cols-2 gap-1.5">
+              {orderAddonOptions.filter(a => a.isAvailable !== false).map((addon) => {
+                const isSelected = orderAddons.includes(addon.label)
+                return (
+                  <button
+                    key={addon.id}
+                    type="button"
+                    onClick={() => toggleOrderAddon(addon.label)}
+                    className={`p-2 rounded-xl border text-left transition-all text-xs font-bold flex items-center justify-between cursor-pointer ${
+                      isSelected
+                        ? 'bg-amber-500 text-white border-amber-500 shadow-xs'
+                        : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    <div className="truncate">
+                      {addon.icon ? `${addon.icon} ` : '✨ '}{addon.label}
+                    </div>
+                    {isSelected && <Check className="w-3.5 h-3.5 text-white flex-shrink-0 ml-1" />}
+                  </button>
+                )
+              })}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* General Notes Input */}
         <div>
